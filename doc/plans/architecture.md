@@ -598,9 +598,73 @@ volumes:
 
 ---
 
-## 6. Estratégia de Testes
+## 6. Estratégia de Testes — TDD First
 
-### 6.1 Ferramentas
+### 6.1 Metodologia — TDD (Test-Driven Development)
+
+Todo código de backend é escrito seguindo o ciclo **Red → Green → Refactor**, sem exceções:
+
+```
+1. RED    — escreve o teste que falha (especifica o comportamento desejado)
+2. GREEN  — escreve o mínimo de código para o teste passar
+3. REFACTOR — melhora o código sem quebrar os testes
+```
+
+**Regras do processo:**
+
+- Nenhum código de produção é escrito sem um teste falhando antes.
+- O teste descreve a **intenção de negócio**, não a implementação interna.
+- Use cases são o ponto de entrada do TDD — o teste do use case guia o design das entidades e value objects.
+- Value Objects e Domain Entities são desenvolvidos TDD puro (unitários com in-memory repos).
+- Repositórios Prisma são desenvolvidos TDD com testes de integração (testcontainers).
+- Controllers/rotas são desenvolvidos TDD com testes E2E.
+
+**Exemplo de ciclo TDD — `CreateLeadUseCase`:**
+
+```typescript
+// PASSO 1 — RED: escreve o teste antes de qualquer implementação
+it('should create a lead and assign it to the first stage of the pipeline', async () => {
+  // Arrange
+  const pipeline = makePipeline({ tenantId: 'tenant-1' })
+  const stage = makeStage({ pipelineId: pipeline.id, order: 1 })
+  pipelineRepo.items.push(pipeline)
+  stageRepo.items.push(stage)
+
+  // Act
+  const result = await sut.execute({
+    tenantId: 'tenant-1',
+    pipelineId: pipeline.id,
+    name: 'Acme Corp',
+    value: 5000,
+  })
+
+  // Assert
+  expect(result.isRight()).toBe(true)
+  expect(leadRepo.items).toHaveLength(1)
+  expect(leadRepo.items[0].stageId).toBe(stage.id)
+})
+
+// PASSO 2 — GREEN: implementa o mínimo para passar
+// PASSO 3 — REFACTOR: melhora sem quebrar
+```
+
+**Factories de teste** para criar agregados válidos sem repetição:
+
+```typescript
+// test/factories/make-lead.ts
+export function makeLead(override: Partial<LeadProps> = {}): Lead {
+  return Lead.create({
+    tenantId: 'tenant-1',
+    pipelineId: 'pipeline-1',
+    stageId: 'stage-1',
+    name: 'Test Lead',
+    status: LeadStatus.OPEN,
+    ...override,
+  })
+}
+```
+
+### 6.2 Ferramentas
 
 | Camada | Ferramenta | Motivo |
 |--------|-----------|--------|
@@ -609,7 +673,7 @@ volumes:
 | Banco integração | **Testcontainers** (`@testcontainers/postgresql`) | PostgreSQL real e isolado por suite |
 | Cobertura | **@vitest/coverage-v8** | Cobertura via V8 nativo, sem Istanbul |
 
-### 6.2 Configuração Vitest
+### 6.3 Configuração Vitest
 
 ```typescript
 // vitest.config.ts (backend)
@@ -680,7 +744,7 @@ Scripts no `package.json`:
 }
 ```
 
-### 6.3 Pirâmide de Testes
+### 6.4 Pirâmide de Testes
 
 ```
          /\
@@ -692,7 +756,7 @@ Scripts no `package.json`:
    /________________\
 ```
 
-### 6.4 Testes Unitários — In-Memory Repositories
+### 6.5 Testes Unitários — In-Memory Repositories
 
 Repositórios in-memory implementam a mesma interface dos repositórios Prisma. Use cases testados com 100% de isolamento, sem banco, sem I/O.
 
@@ -744,7 +808,7 @@ describe('CreateUserUseCase', () => {
 })
 ```
 
-### 6.5 Testes de Integração — Prisma + Testcontainers
+### 6.6 Testes de Integração — Prisma + Testcontainers
 
 ```typescript
 // __tests__/integration/prisma-user-identity.repository.spec.ts
@@ -780,7 +844,7 @@ describe('PrismaUserIdentityRepository', () => {
 })
 ```
 
-### 6.6 Testes E2E — Supertest + @nestjs/testing
+### 6.7 Testes E2E — Supertest + @nestjs/testing
 
 ```typescript
 // test/auth.e2e-spec.ts
@@ -1104,6 +1168,7 @@ Reseller → POST /auth/impersonate/:tenantId
 | Multi-tenancy | Row-level (tenantId) | Simples, adequado para início. Schema-per-tenant pode ser adotado depois se necessário. |
 | User aggregate | Split em 3 (Identity/Profile/Authorization) | Separação de responsabilidades, cada aggregate evolui independente. |
 | Error handling | Either Pattern | Erros são valores tipados — sem throws não controlados, fácil de testar. |
+| Metodologia | **TDD** (Red → Green → Refactor) | Nenhum código de produção sem teste falhando antes — garante design guiado pelo comportamento. |
 | Test runner | **Vitest** | Nativo ESM/TS, watch ultrarrápido, sem config extra, API compatível com Jest. |
 | Testes unitários | In-memory repositories | Zero I/O, rápidos, sem acoplamento ao Prisma. |
 | Testes integração | Testcontainers (PostgreSQL real) | Evita divergência entre mocks e banco real. |
