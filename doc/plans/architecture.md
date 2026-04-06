@@ -600,11 +600,91 @@ volumes:
 
 ## 6. Estratégia de Testes
 
-### 6.1 Pirâmide de Testes
+### 6.1 Ferramentas
+
+| Camada | Ferramenta | Motivo |
+|--------|-----------|--------|
+| Unitários + Integração | **Vitest** | Nativo ESM, watch ultra-rápido, API compatível com Jest, sem config extra para TypeScript |
+| E2E HTTP | **Supertest** + **@nestjs/testing** | Sobe o módulo NestJS sem porta, requisições HTTP reais |
+| Banco integração | **Testcontainers** (`@testcontainers/postgresql`) | PostgreSQL real e isolado por suite |
+| Cobertura | **@vitest/coverage-v8** | Cobertura via V8 nativo, sem Istanbul |
+
+### 6.2 Configuração Vitest
+
+```typescript
+// vitest.config.ts (backend)
+import { defineConfig } from 'vitest/config'
+import tsconfigPaths from 'vite-tsconfig-paths'
+
+export default defineConfig({
+  plugins: [tsconfigPaths()],
+  test: {
+    globals: true,                     // describe/it/expect sem import
+    root: './src',
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'lcov', 'html'],
+      thresholds: {
+        lines: 85,
+        functions: 85,
+        branches: 80,
+      },
+      include: ['src/modules/**/domain/**', 'src/modules/**/application/**'],
+      exclude: ['**/*.dto.ts', '**/*.module.ts', '**/index.ts'],
+    },
+    // Projetos separados para isolar configs por camada
+    projects: [
+      {
+        name: 'unit',
+        test: {
+          include: ['**/__tests__/unit/**/*.spec.ts'],
+          environment: 'node',
+        },
+      },
+      {
+        name: 'integration',
+        test: {
+          include: ['**/__tests__/integration/**/*.spec.ts'],
+          environment: 'node',
+          testTimeout: 30_000,      // testcontainers é mais lento
+          hookTimeout: 60_000,
+          pool: 'forks',            // processos isolados — cada suite tem seu container
+          poolOptions: { forks: { singleFork: true } },
+        },
+      },
+      {
+        name: 'e2e',
+        test: {
+          include: ['test/**/*.e2e-spec.ts'],
+          environment: 'node',
+          testTimeout: 30_000,
+          hookTimeout: 60_000,
+        },
+      },
+    ],
+  },
+})
+```
+
+Scripts no `package.json`:
+```json
+{
+  "scripts": {
+    "test":            "vitest run --project=unit",
+    "test:watch":      "vitest --project=unit",
+    "test:integration":"vitest run --project=integration",
+    "test:e2e":        "vitest run --project=e2e",
+    "test:all":        "vitest run",
+    "test:cov":        "vitest run --coverage"
+  }
+}
+```
+
+### 6.3 Pirâmide de Testes
 
 ```
          /\
-        /E2E\         ← ~10% — Supertest, fluxos completos por feature
+        /E2E\         ← ~10% — Supertest + @nestjs/testing, fluxos completos
        /------\
       /Integração\    ← ~20% — Repositórios Prisma com testcontainers
      /------------\
@@ -612,9 +692,9 @@ volumes:
    /________________\
 ```
 
-### 6.2 Testes Unitários — In-Memory Repositories
+### 6.4 Testes Unitários — In-Memory Repositories
 
-Estratégia vinda do revalida: repositórios in-memory implementam a mesma interface dos repositórios Prisma. Os use cases são testados com 100% de isolamento, sem banco, sem I/O.
+Repositórios in-memory implementam a mesma interface dos repositórios Prisma. Use cases testados com 100% de isolamento, sem banco, sem I/O.
 
 ```typescript
 // test/repositories/in-memory-user-identity.repository.ts
@@ -640,7 +720,9 @@ export class InMemoryUserIdentityRepository implements IUserIdentityRepository {
 ```
 
 ```typescript
-// Teste do use case — sem banco, sem mocks de framework
+// __tests__/unit/create-user.use-case.spec.ts
+import { describe, it, expect, beforeEach } from 'vitest'
+
 describe('CreateUserUseCase', () => {
   let sut: CreateUserUseCase
   let identityRepo: InMemoryUserIdentityRepository
@@ -662,10 +744,14 @@ describe('CreateUserUseCase', () => {
 })
 ```
 
-### 6.3 Testes de Integração — Prisma + Testcontainers
+### 6.5 Testes de Integração — Prisma + Testcontainers
 
 ```typescript
-describe('PrismaUserIdentityRepository (integration)', () => {
+// __tests__/integration/prisma-user-identity.repository.spec.ts
+import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest'
+import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers/postgresql'
+
+describe('PrismaUserIdentityRepository', () => {
   let container: StartedPostgreSqlContainer
   let prisma: PrismaClient
   let repo: PrismaUserIdentityRepository
@@ -673,7 +759,9 @@ describe('PrismaUserIdentityRepository (integration)', () => {
   beforeAll(async () => {
     container = await new PostgreSqlContainer('postgres:16-alpine').start()
     prisma = new PrismaClient({ datasources: { db: { url: container.getConnectionUri() } } })
-    await execSync(`prisma migrate deploy`) // aplica migrations reais
+    await execSync('prisma migrate deploy', {
+      env: { ...process.env, DATABASE_URL: container.getConnectionUri() },
+    })
     repo = new PrismaUserIdentityRepository(prisma)
   })
 
@@ -683,7 +771,7 @@ describe('PrismaUserIdentityRepository (integration)', () => {
   })
 
   afterEach(async () => {
-    await prisma.userIdentity.deleteMany() // limpa entre testes
+    await prisma.userIdentity.deleteMany()
   })
 
   it('should find by email excluding soft-deleted records', async () => {
@@ -692,22 +780,42 @@ describe('PrismaUserIdentityRepository (integration)', () => {
 })
 ```
 
-### 6.4 Testes E2E — Supertest
+### 6.6 Testes E2E — Supertest + @nestjs/testing
 
-- Banco isolado por suite (testcontainers ou schema separado).
-- Fixtures factory para criar tenant + usuário em estado válido.
-- Cobrir: login, refresh token, impersonation, criação de lead, movimentação no pipeline.
+```typescript
+// test/auth.e2e-spec.ts
+import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { Test } from '@nestjs/testing'
+import * as request from 'supertest'
 
-### 6.5 Cobertura Mínima (Jest config)
+describe('Auth (e2e)', () => {
+  let app: INestApplication
 
-```json
-{
-  "coverageThresholds": {
-    "global": { "lines": 85, "functions": 85, "branches": 80 },
-    "./src/modules/**/domain/**": { "lines": 90 },
-    "./src/modules/**/application/**": { "lines": 85 }
-  }
-}
+  beforeAll(async () => {
+    const module = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile()
+
+    app = module.createNestApplication()
+    await app.init()
+  })
+
+  afterAll(() => app.close())
+
+  it('POST /auth/login → 200 with valid credentials', async () => {
+    await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({ email: 'reseller@wb.com', password: 'P@ss1234' })
+      .expect(200)
+      .expect(res => {
+        expect(res.body).toHaveProperty('accessToken')
+      })
+  })
+
+  it('POST /auth/impersonate/:tenantId → 403 for non-reseller', async () => {
+    // ...
+  })
+})
 ```
 
 ---
@@ -843,6 +951,7 @@ Reseller → POST /auth/impersonate/:tenantId
 | Multi-tenancy | Row-level (tenantId) | Simples, adequado para início. Schema-per-tenant pode ser adotado depois se necessário. |
 | User aggregate | Split em 3 (Identity/Profile/Authorization) | Separação de responsabilidades, cada aggregate evolui independente. |
 | Error handling | Either Pattern | Erros são valores tipados — sem throws não controlados, fácil de testar. |
+| Test runner | **Vitest** | Nativo ESM/TS, watch ultrarrápido, sem config extra, API compatível com Jest. |
 | Testes unitários | In-memory repositories | Zero I/O, rápidos, sem acoplamento ao Prisma. |
 | Testes integração | Testcontainers (PostgreSQL real) | Evita divergência entre mocks e banco real. |
 | ORM | Prisma | DX excelente, type-safety, migrations confiáveis. |
