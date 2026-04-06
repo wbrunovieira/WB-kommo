@@ -1,6 +1,6 @@
 # WB-Kommo — CRM SaaS: Documento de Arquitetura
 
-> Versão 1.0 — 2026-04-06
+> Versão 1.1 — 2026-04-06
 
 ---
 
@@ -14,7 +14,7 @@ Sistema CRM SaaS para gestão de leads, inspirado no Kommo. O modelo de negócio
 |------|-----------|
 | **Reseller (Super Admin)** | Proprietário da plataforma. Acesso total, gerencia planos, clientes e pode impersonar qualquer conta. |
 | **Admin de Conta** | Administrador do espaço de trabalho de um cliente. Gerencia usuários, pipelines e configurações da conta. |
-| **Usuário** | Membro da equipe de um cliente. Acessa leads, pipelines e tarefas conforme permissões. |
+| **Usuário (Member)** | Membro da equipe de um cliente. Acessa leads, pipelines e tarefas conforme permissões. |
 
 ---
 
@@ -56,14 +56,15 @@ WB-kommo/
 
 - **Domain-Driven Design (DDD)**: Bounded Contexts bem definidos, Entities, Value Objects, Aggregates, Domain Events, Repositories e Application Services.
 - **Hexagonal Architecture (Ports & Adapters)**: O domínio não depende de infraestrutura. Repositórios são abstrações (interfaces) implementadas na camada de infraestrutura.
-- **CQRS leve**: Separação de commands (mutações) e queries (leituras) dentro dos Application Services. Pode evoluir para CQRS completo com Event Sourcing no futuro.
+- **Either Pattern**: Todos os use cases e repositórios retornam `Either<DomainError, T>` — sem exceções não tratadas, erros são valores tipados.
+- **CQRS leve**: Separação de commands (mutações) e queries (leituras) dentro dos Application Services.
 - **Dependency Injection**: 100% via NestJS IoC container.
 
 ### 3.2 Bounded Contexts (Módulos)
 
 ```
 src/modules/
-├── auth/               # Autenticação, JWT, refresh tokens, impersonation
+├── auth/               # Autenticação, JWT, refresh tokens, sessions, impersonation
 ├── tenants/            # Gestão de contas/workspaces (multi-tenancy)
 ├── users/              # Usuários dentro de cada tenant
 ├── plans/              # Planos de assinatura e billing
@@ -78,79 +79,342 @@ src/modules/
 ### 3.3 Estrutura Interna de cada Módulo (DDD)
 
 ```
-modules/leads/
+modules/users/
 ├── domain/
 │   ├── entities/
-│   │   └── lead.entity.ts
+│   │   ├── user-identity.entity.ts      # Auth: email, password, tokens, bloqueio
+│   │   ├── user-profile.entity.ts       # Dados pessoais: nome, avatar, timezone
+│   │   └── user-authorization.entity.ts # Roles e permissões granulares
 │   ├── value-objects/
-│   │   ├── lead-status.vo.ts
-│   │   └── contact-info.vo.ts
-│   ├── aggregates/
-│   │   └── lead.aggregate.ts
+│   │   ├── email.vo.ts
+│   │   ├── password.vo.ts
+│   │   ├── user-role.vo.ts
+│   │   └── session-token.vo.ts
 │   ├── events/
-│   │   └── lead-created.event.ts
+│   │   ├── user-created.event.ts
+│   │   └── user-impersonated.event.ts
 │   ├── repositories/
-│   │   └── lead.repository.ts       # Interface (Port)
-│   └── services/
-│       └── lead-scoring.service.ts  # Domain Service
+│   │   ├── i-user-identity.repository.ts
+│   │   ├── i-user-profile.repository.ts
+│   │   └── i-user-authorization.repository.ts
+│   └── errors/
+│       ├── user-not-found.error.ts
+│       └── invalid-credentials.error.ts
 ├── application/
-│   ├── commands/
-│   │   ├── create-lead.command.ts
-│   │   └── create-lead.handler.ts
-│   ├── queries/
-│   │   ├── get-leads.query.ts
-│   │   └── get-leads.handler.ts
+│   ├── use-cases/
+│   │   ├── create-user.use-case.ts
+│   │   ├── authenticate-user.use-case.ts
+│   │   └── impersonate-tenant.use-case.ts
 │   ├── dtos/
-│   │   ├── create-lead.dto.ts
-│   │   └── lead-response.dto.ts
-│   └── use-cases/
-│       └── create-lead.use-case.ts
+│   │   ├── create-user.dto.ts
+│   │   └── user-response.dto.ts
+│   ├── mappers/
+│   │   ├── user-identity.mapper.ts
+│   │   ├── user-profile.mapper.ts
+│   │   └── user-authorization.mapper.ts
+│   └── criteria/
+│       └── user-profile.criteria.ts     # Fluent query builder
 ├── infrastructure/
 │   ├── repositories/
-│   │   └── prisma-lead.repository.ts  # Adapter
-│   └── mappers/
-│       └── lead.mapper.ts
+│   │   ├── prisma-user-identity.repository.ts
+│   │   ├── prisma-user-profile.repository.ts
+│   │   └── prisma-user-authorization.repository.ts
+│   └── test/
+│       ├── in-memory-user-identity.repository.ts
+│       ├── in-memory-user-profile.repository.ts
+│       └── in-memory-user-authorization.repository.ts
 ├── presentation/
-│   ├── leads.controller.ts
-│   └── leads.module.ts
+│   ├── users.controller.ts
+│   └── users.module.ts
 └── __tests__/
     ├── unit/
     ├── integration/
     └── e2e/
 ```
 
-### 3.4 Multi-tenancy
+### 3.4 Design do Aggregate User — Split Aggregate Pattern
 
-Estratégia: **Row-Level Tenancy com tenant_id em todas as tabelas**.
+Inspirado no projeto revalida, o User é dividido em **3 aggregates separados**, cada um com responsabilidade única:
+
+#### `UserIdentity` — Autenticação
+```typescript
+// Responsável por: credenciais, verificação, bloqueio de conta
+class UserIdentity extends Entity<UserIdentityProps> {
+  tenantId: string           // multi-tenancy
+  email: Email               // Value Object com validação RFC 5321
+  password: Password         // Value Object com bcrypt
+  isEmailVerified: boolean
+  emailVerificationToken?: string
+  passwordResetToken?: string
+  passwordResetExpiresAt?: Date
+  failedLoginAttempts: number
+  lockedUntil?: Date         // bloqueio após 5 tentativas
+  lastLoginAt?: Date
+  deletedAt?: Date           // soft delete com anonimização de email
+
+  // Métodos de domínio
+  incrementFailedAttempts(): void   // bloqueia após 5
+  resetFailedAttempts(): void
+  lockAccount(minutes: number): void
+  isLocked(): boolean
+  requestPasswordReset(): string    // gera token + expiry
+  verifyEmail(): void
+  softDelete(): void                // anonimiza email
+}
+```
+
+#### `UserProfile` — Dados Pessoais
+```typescript
+// Responsável por: nome, avatar, preferências, timezone
+class UserProfile extends Entity<UserProfileProps> {
+  tenantId: string
+  identityId: string         // FK para UserIdentity
+  name: string
+  avatarUrl?: string
+  phone?: string
+  timezone: string           // default: 'America/Sao_Paulo'
+  language: string           // default: 'pt-BR'
+  deletedAt?: Date           // soft delete
+
+  // Métodos de domínio
+  updateProfile(data: Partial<UserProfileProps>): void
+  softDelete(): void
+}
+```
+
+#### `UserAuthorization` — Papéis e Permissões
+```typescript
+// Responsável por: roles, permissões granulares, vigência
+class UserAuthorization extends Entity<UserAuthorizationProps> {
+  tenantId: string
+  identityId: string
+  role: UserRole             // Value Object: RESELLER | ACCOUNT_ADMIN | MEMBER
+  customPermissions: string[] // ex: ['leads:export', 'pipeline:delete']
+  restrictions: string[]      // ex: ['leads:import']
+  effectiveFrom: Date
+  effectiveUntil?: Date       // assinatura expira
+
+  // Métodos de domínio
+  isActive(): boolean
+  can(permission: string): boolean
+  addPermission(permission: string): void
+  removePermission(permission: string): void
+  restrict(restriction: string): void
+}
+```
+
+#### `UserSession` — Rastreamento de Sessões
+```typescript
+// Separado para não poluir UserIdentity
+class UserSession extends Entity<UserSessionProps> {
+  tenantId: string
+  identityId: string
+  refreshTokenHash: SessionToken  // SHA256 do refresh token
+  ipAddress: string
+  userAgent: string
+  isImpersonation: boolean        // flag para sessões de impersonation
+  impersonatorId?: string         // quem iniciou a impersonation
+  expiresAt: Date
+  revokedAt?: Date
+
+  isValid(): boolean
+  revoke(): void
+}
+```
+
+### 3.5 Value Objects do Domínio User
+
+#### `Email`
+- Validação RFC 5321 (local part ≤ 64, domain ≤ 255)
+- Normalização automática (lowercase)
+- Prevenção de pontos consecutivos
+- Factory method `createTrusted()` para dados vindos do banco
+
+#### `Password`
+- Hash via bcryptjs (salt rounds: 12)
+- Mín 8, máx 100 caracteres
+- Requer: maiúscula, minúscula, número, caractere especial
+- Lista de senhas comuns bloqueadas
+- `generate()` para senhas temporárias (onboarding de clientes)
+
+#### `UserRole`
+```typescript
+// Centraliza todas as regras de permissão
+class UserRole {
+  private readonly value: 'RESELLER' | 'ACCOUNT_ADMIN' | 'MEMBER'
+
+  isReseller(): boolean
+  isAccountAdmin(): boolean
+  isMember(): boolean
+
+  // Permissões implícitas por role
+  canManageAllTenants(): boolean    // apenas RESELLER
+  canImpersonate(): boolean         // apenas RESELLER
+  canManageUsers(): boolean         // RESELLER | ACCOUNT_ADMIN
+  canManagePipelines(): boolean     // RESELLER | ACCOUNT_ADMIN
+  canCreateLeads(): boolean         // todos
+  canDeleteLeads(): boolean         // RESELLER | ACCOUNT_ADMIN
+  canExportData(): boolean          // RESELLER | ACCOUNT_ADMIN
+  canViewBilling(): boolean         // RESELLER | ACCOUNT_ADMIN
+}
+```
+
+#### `SessionToken`
+- Hash SHA256 do token para armazenamento seguro no banco
+- O token raw só existe em memória/cookie — nunca persiste
+
+### 3.6 Either Pattern para Erros de Domínio
+
+```typescript
+// Todos os use cases retornam Either — sem throws não controlados
+type Either<L, R> = Left<L, R> | Right<L, R>
+
+// Exemplo: CreateUserUseCase
+async execute(dto: CreateUserDto): Promise<Either<
+  UserAlreadyExistsError | InvalidEmailError | WeakPasswordError,
+  UserResponseDto
+>> {
+  const emailOrError = Email.create(dto.email)
+  if (emailOrError.isLeft()) return left(emailOrError.value)
+
+  const exists = await this.userIdentityRepo.emailExists(emailOrError.value)
+  if (exists) return left(new UserAlreadyExistsError())
+
+  // ... cria entidades, persiste, retorna Right
+  return right(UserProfileMapper.toResponse(profile))
+}
+```
+
+### 3.7 Criteria Pattern para Queries Complexas
+
+```typescript
+// Fluent builder — sem vazar SQL/Prisma para o domínio
+const criteria = new UserProfileCriteria()
+  .byTenant(tenantId)
+  .byRole('MEMBER')
+  .withPagination({ page: 1, limit: 20 })
+  .orderBy('name', 'asc')
+
+const users = await userProfileRepo.findByCriteria(criteria)
+```
+
+### 3.8 Multi-tenancy
+
+Estratégia: **Row-Level Tenancy com `tenantId` em todas as tabelas**.
 
 - Cada request autenticado carrega o `tenantId` no JWT.
 - Um `TenantGuard` global injeta o contexto de tenant em todas as queries.
-- O Prisma middleware garante que todo acesso seja filtrado pelo `tenantId`.
-- Dados do Reseller ficam no tenant com role `RESELLER` (tenant especial).
+- O Prisma middleware garante que todo acesso seja filtrado pelo `tenantId` — impossível vazar dados entre tenants.
+- Dados do Reseller ficam em um tenant especial com role `RESELLER`.
 
-### 3.5 Impersonation (Login como Cliente)
+### 3.9 Impersonation (Login como Cliente)
 
 Fluxo:
 1. Reseller chama `POST /auth/impersonate/:tenantId`.
-2. Backend valida que o solicitante tem role `RESELLER`.
-3. Gera um JWT de curta duração (`impersonation_token`) com claims: `{ sub: resellerId, impersonating: tenantId, role: ADMIN }`.
-4. Toda ação feita com esse token é logada em `audit_logs` com flag `impersonated: true`.
-5. Reseller pode encerrar a impersonação via `POST /auth/impersonate/end`.
+2. `ImpersonationGuard` valida role `RESELLER`.
+3. Gera JWT de curta duração (30min): `{ sub: resellerId, impersonating: tenantId, role: ACCOUNT_ADMIN }`.
+4. Cria `UserSession` com `isImpersonation: true` e `impersonatorId`.
+5. **Todo** acesso com esse token é gravado em `AuditLog` com `impersonated: true` (imutável — sem UPDATE/DELETE).
+6. Encerrar via `POST /auth/impersonate/end` revoga a `UserSession`.
 
-### 3.6 Autenticação & Autorização
+### 3.10 Autenticação
 
-- JWT (Access Token 15min) + Refresh Token (7 dias, httpOnly cookie).
-- Role-based: `RESELLER | ACCOUNT_ADMIN | MEMBER`.
-- Permission-based dentro do tenant (ex: `leads:create`, `pipeline:manage`).
+- Access Token (JWT, 15min) + Refresh Token (7 dias, httpOnly cookie).
+- Refresh Token: hash SHA256 armazenado na `UserSession` — token raw nunca persiste.
 - Guards: `JwtAuthGuard`, `RolesGuard`, `TenantGuard`, `ImpersonationGuard`.
+- Rate limiting no login: 5 tentativas/minuto → bloqueia conta por 15min.
+- Bloqueio de conta rastreado no `UserIdentity` (`failedLoginAttempts`, `lockedUntil`).
 
 ---
 
 ## 4. Banco de Dados — PostgreSQL + Prisma
 
-### 4.1 Schema Principal (entidades-chave)
+### 4.1 Schema Prisma (módulo users)
 
 ```prisma
+model UserIdentity {
+  id                        String    @id @default(uuid())
+  tenantId                  String
+  email                     String
+  passwordHash              String
+  isEmailVerified           Boolean   @default(false)
+  emailVerificationToken    String?
+  passwordResetToken        String?
+  passwordResetExpiresAt    DateTime?
+  failedLoginAttempts       Int       @default(0)
+  lockedUntil               DateTime?
+  lastLoginAt               DateTime?
+  deletedAt                 DateTime?
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
+
+  tenant        Tenant           @relation(fields: [tenantId], references: [id])
+  profile       UserProfile?
+  authorization UserAuthorization?
+  sessions      UserSession[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@index([emailVerificationToken])
+  @@index([passwordResetToken])
+}
+
+model UserProfile {
+  id         String    @id @default(uuid())
+  tenantId   String
+  identityId String    @unique
+  name       String
+  avatarUrl  String?
+  phone      String?
+  timezone   String    @default("America/Sao_Paulo")
+  language   String    @default("pt-BR")
+  deletedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  identity  UserIdentity @relation(fields: [identityId], references: [id])
+  tenant    Tenant       @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+}
+
+model UserAuthorization {
+  id                String    @id @default(uuid())
+  tenantId          String
+  identityId        String    @unique
+  role              RoleType  @default(MEMBER)
+  customPermissions Json      @default("[]")
+  restrictions      Json      @default("[]")
+  effectiveFrom     DateTime  @default(now())
+  effectiveUntil    DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  identity UserIdentity @relation(fields: [identityId], references: [id])
+  tenant   Tenant       @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, role])
+}
+
+model UserSession {
+  id              String    @id @default(uuid())
+  tenantId        String
+  identityId      String
+  refreshTokenHash String
+  ipAddress       String?
+  userAgent       String?
+  isImpersonation Boolean   @default(false)
+  impersonatorId  String?
+  expiresAt       DateTime
+  revokedAt       DateTime?
+  createdAt       DateTime  @default(now())
+
+  identity UserIdentity @relation(fields: [identityId], references: [id])
+
+  @@index([tenantId, identityId])
+  @@index([refreshTokenHash])
+}
+
 model Tenant {
   id          String   @id @default(uuid())
   name        String
@@ -159,51 +423,47 @@ model Tenant {
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   plan        Plan     @relation(fields: [planId], references: [id])
-  users       User[]
+  identities  UserIdentity[]
+  profiles    UserProfile[]
+  authorizations UserAuthorization[]
   leads       Lead[]
   pipelines   Pipeline[]
 }
 
-model User {
-  id         String   @id @default(uuid())
-  tenantId   String
-  email      String
-  name       String
-  role       Role     @default(MEMBER)
-  passwordHash String
-  isActive   Boolean  @default(true)
-  tenant     Tenant   @relation(fields: [tenantId], references: [id])
-  @@unique([tenantId, email])
-}
-
 model Plan {
-  id          String   @id @default(uuid())
-  name        String   // Starter, Pro, Enterprise
-  maxUsers    Int
-  maxLeads    Int
-  price       Decimal
-  features    Json
-  tenants     Tenant[]
+  id        String   @id @default(uuid())
+  name      String   // Starter | Pro | Enterprise
+  maxUsers  Int
+  maxLeads  Int
+  price     Decimal
+  features  Json
+  tenants   Tenant[]
 }
 
 model Lead {
-  id          String     @id @default(uuid())
-  tenantId    String
-  pipelineId  String
-  stageId     String
-  name        String
-  value       Decimal?
-  status      LeadStatus @default(OPEN)
-  assignedTo  String?
-  contacts    Contact[]
-  activities  Activity[]
-  tags        Tag[]
+  id           String     @id @default(uuid())
+  tenantId     String
+  pipelineId   String
+  stageId      String
+  name         String
+  value        Decimal?
+  status       LeadStatus @default(OPEN)
+  assignedToId String?
   customFields Json?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-  tenant      Tenant     @relation(fields: [tenantId], references: [id])
-  pipeline    Pipeline   @relation(fields: [pipelineId], references: [id])
-  stage       Stage      @relation(fields: [stageId], references: [id])
+  tags         String[]   @default([])
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  deletedAt    DateTime?
+
+  tenant     Tenant     @relation(fields: [tenantId], references: [id])
+  pipeline   Pipeline   @relation(fields: [pipelineId], references: [id])
+  stage      Stage      @relation(fields: [stageId], references: [id])
+  contacts   Contact[]
+  activities Activity[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, pipelineId])
+  @@index([tenantId, stageId])
 }
 
 model Pipeline {
@@ -214,6 +474,8 @@ model Pipeline {
   stages   Stage[]
   leads    Lead[]
   tenant   Tenant  @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
 }
 
 model Stage {
@@ -234,6 +496,8 @@ model Contact {
   email    String?
   phone    String?
   lead     Lead?   @relation(fields: [leadId], references: [id])
+
+  @@index([tenantId])
 }
 
 model Activity {
@@ -241,38 +505,63 @@ model Activity {
   tenantId  String
   leadId    String
   userId    String
-  type      ActivityType // NOTE, CALL, EMAIL, TASK, MEETING
+  type      ActivityType
   content   String
   dueDate   DateTime?
   completed Boolean      @default(false)
+  createdAt DateTime     @default(now())
   lead      Lead         @relation(fields: [leadId], references: [id])
+
+  @@index([tenantId, leadId])
 }
 
 model AuditLog {
-  id            String   @id @default(uuid())
-  tenantId      String
-  userId        String
-  action        String
-  entity        String
-  entityId      String
-  payload       Json?
-  impersonated  Boolean  @default(false)
+  id             String   @id @default(uuid())
+  tenantId       String
+  userId         String
+  action         String
+  entity         String
+  entityId       String
+  payload        Json?
+  impersonated   Boolean  @default(false)
   impersonatorId String?
-  createdAt     DateTime @default(now())
+  createdAt      DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([impersonated])
+}
+
+enum RoleType {
+  RESELLER
+  ACCOUNT_ADMIN
+  MEMBER
+}
+
+enum LeadStatus {
+  OPEN
+  WON
+  LOST
+}
+
+enum ActivityType {
+  NOTE
+  CALL
+  EMAIL
+  TASK
+  MEETING
 }
 ```
 
 ### 4.2 Migrations & Seeds
 
 - Migrations versionadas via `prisma migrate`.
-- Seeds separados por ambiente: `seed.ts` (dev) e `seed.production.ts` (dados mínimos).
+- Seeds separados: `seed.ts` (dev) e `seed.production.ts` (dados mínimos: planos + reseller).
 
 ---
 
 ## 5. Infraestrutura — Docker Compose
 
 ```yaml
-# backend/docker-compose.yml
 services:
   api:
     build: .
@@ -291,7 +580,6 @@ services:
     image: redis:7-alpine
     ports: ["6379:6379"]
 
-  # Opcional - Bull Queue UI
   bull-board:
     image: deadly0/bull-board
     ports: ["3002:3000"]
@@ -300,8 +588,6 @@ services:
 volumes:
   postgres_data:
 ```
-
-### Serviços de Infraestrutura
 
 | Serviço | Uso |
 |---------|-----|
@@ -320,73 +606,106 @@ volumes:
          /\
         /E2E\         ← ~10% — Supertest, fluxos completos por feature
        /------\
-      /Integração\    ← ~20% — Módulos com DB real (test container)
+      /Integração\    ← ~20% — Repositórios Prisma com testcontainers
      /------------\
-    /    Unitários  \  ← ~70% — Domain layer, use cases, value objects
+    /    Unitários  \  ← ~70% — Domain + Use Cases com in-memory repos
    /________________\
 ```
 
-### 6.2 Testes Unitários
+### 6.2 Testes Unitários — In-Memory Repositories
 
-- **Escopo**: Domain entities, Value Objects, Domain Services, Use Cases, Handlers.
-- **Ferramentas**: Jest + ts-jest.
-- **Mocks**: Repositórios mockados manualmente (interfaces). Sem framework de mock pesado.
-- **Meta de cobertura**: ≥ 85% nas camadas `domain/` e `application/`.
+Estratégia vinda do revalida: repositórios in-memory implementam a mesma interface dos repositórios Prisma. Os use cases são testados com 100% de isolamento, sem banco, sem I/O.
 
 ```typescript
-// Exemplo: lead.entity.spec.ts
-describe('Lead Entity', () => {
-  it('should not allow moving to a previous stage without permission', () => {
-    const lead = LeadFactory.create({ stageOrder: 2 });
-    expect(() => lead.moveToStage(stageOrder: 1)).toThrow(DomainException);
-  });
-});
+// test/repositories/in-memory-user-identity.repository.ts
+export class InMemoryUserIdentityRepository implements IUserIdentityRepository {
+  public items: UserIdentity[] = []
+
+  async findByEmail(email: Email): Promise<UserIdentity | null> {
+    return this.items.find(
+      u => u.email.equals(email) && !u.deletedAt
+    ) ?? null
+  }
+
+  async emailExists(email: Email): Promise<boolean> {
+    return this.items.some(u => u.email.equals(email) && !u.deletedAt)
+  }
+
+  async save(identity: UserIdentity): Promise<void> {
+    const idx = this.items.findIndex(u => u.id === identity.id)
+    if (idx >= 0) this.items[idx] = identity
+    else this.items.push(identity)
+  }
+}
 ```
 
-### 6.3 Testes de Integração
+```typescript
+// Teste do use case — sem banco, sem mocks de framework
+describe('CreateUserUseCase', () => {
+  let sut: CreateUserUseCase
+  let identityRepo: InMemoryUserIdentityRepository
+  let profileRepo: InMemoryUserProfileRepository
 
-- **Escopo**: Repositórios Prisma contra banco real, Application Services com DB.
-- **Ferramentas**: Jest + `@testcontainers/postgresql` (banco isolado por suite).
-- **Estratégia**: Cada suite cria seu próprio schema/banco, trunca entre testes.
-- **Meta de cobertura**: Todos os repositórios e use cases críticos cobertos.
+  beforeEach(() => {
+    identityRepo = new InMemoryUserIdentityRepository()
+    profileRepo = new InMemoryUserProfileRepository()
+    sut = new CreateUserUseCase(identityRepo, profileRepo)
+  })
+
+  it('should return error if email already exists', async () => {
+    await sut.execute({ email: 'a@b.com', name: 'Test', tenantId: 't1', password: 'P@ss1234' })
+    const result = await sut.execute({ email: 'a@b.com', name: 'Test', tenantId: 't1', password: 'P@ss1234' })
+
+    expect(result.isLeft()).toBe(true)
+    expect(result.value).toBeInstanceOf(UserAlreadyExistsError)
+  })
+})
+```
+
+### 6.3 Testes de Integração — Prisma + Testcontainers
 
 ```typescript
-// Exemplo: prisma-lead.repository.spec.ts
-describe('PrismaLeadRepository (integration)', () => {
-  let container: StartedPostgreSqlContainer;
-  
+describe('PrismaUserIdentityRepository (integration)', () => {
+  let container: StartedPostgreSqlContainer
+  let prisma: PrismaClient
+  let repo: PrismaUserIdentityRepository
+
   beforeAll(async () => {
-    container = await new PostgreSqlContainer().start();
-    // aplica migrations no container
-  });
-  
-  it('should persist and retrieve a lead by tenant', async () => {
+    container = await new PostgreSqlContainer('postgres:16-alpine').start()
+    prisma = new PrismaClient({ datasources: { db: { url: container.getConnectionUri() } } })
+    await execSync(`prisma migrate deploy`) // aplica migrations reais
+    repo = new PrismaUserIdentityRepository(prisma)
+  })
+
+  afterAll(async () => {
+    await prisma.$disconnect()
+    await container.stop()
+  })
+
+  afterEach(async () => {
+    await prisma.userIdentity.deleteMany() // limpa entre testes
+  })
+
+  it('should find by email excluding soft-deleted records', async () => {
     // ...
-  });
-});
+  })
+})
 ```
 
-### 6.4 Testes E2E
+### 6.4 Testes E2E — Supertest
 
-- **Escopo**: Endpoints HTTP completos, autenticação, multi-tenancy, impersonation.
-- **Ferramentas**: Jest + Supertest + banco de test isolado.
-- **Fixtures**: Factories para criar tenants, usuários e leads de teste.
-- **Meta**: Cobrir todos os fluxos críticos de negócio (criar lead, mover no pipeline, impersonation, billing).
+- Banco isolado por suite (testcontainers ou schema separado).
+- Fixtures factory para criar tenant + usuário em estado válido.
+- Cobrir: login, refresh token, impersonation, criação de lead, movimentação no pipeline.
 
-### 6.5 Configuração de Cobertura (Jest)
+### 6.5 Cobertura Mínima (Jest config)
 
 ```json
 {
   "coverageThresholds": {
-    "global": {
-      "branches": 80,
-      "functions": 85,
-      "lines": 85,
-      "statements": 85
-    },
-    "./src/modules/**/domain/**": {
-      "lines": 90
-    }
+    "global": { "lines": 85, "functions": 85, "branches": 80 },
+    "./src/modules/**/domain/**": { "lines": 90 },
+    "./src/modules/**/application/**": { "lines": 85 }
   }
 }
 ```
@@ -419,12 +738,12 @@ frontend/src/
 │   ├── (auth)/
 │   │   ├── login/page.tsx
 │   │   └── layout.tsx
-│   ├── (reseller)/               # Area exclusiva do reseller
+│   ├── (reseller)/               # Área exclusiva do reseller
 │   │   ├── dashboard/page.tsx
 │   │   ├── clients/page.tsx
 │   │   ├── clients/[id]/page.tsx
 │   │   └── layout.tsx
-│   ├── (workspace)/              # Area do tenant (cliente ou reseller impersonando)
+│   ├── (workspace)/              # Área do tenant
 │   │   ├── leads/page.tsx
 │   │   ├── pipeline/[id]/page.tsx
 │   │   ├── contacts/page.tsx
@@ -444,7 +763,7 @@ frontend/src/
 │   ├── pipeline/
 │   └── tenants/
 ├── lib/
-│   ├── api/                      # Clientes HTTP (fetch wrappers)
+│   ├── api/                      # Fetch wrappers tipados
 │   ├── hooks/                    # Hooks customizados
 │   ├── stores/                   # Zustand stores
 │   └── utils/
@@ -455,119 +774,126 @@ frontend/src/
 ### 7.3 Impersonation no Frontend
 
 - Header exibe banner `"Visualizando como: [Nome do Cliente]"` com botão de sair.
-- Ao iniciar impersonation, o token é armazenado separado do token principal.
+- Token de impersonation armazenado separado do token principal (sessionStorage).
 - Rota `/reseller/clients/[id]/impersonate` aciona o fluxo.
 - Encerrar retorna ao token original do reseller.
 
 ### 7.4 UI/UX — Inspiração Kommo
 
-- **Kanban de Pipeline**: colunas arrastáveis (dnd-kit) com cards de leads, animações de transição suaves (Framer Motion).
-- **Lead Detail**: painel lateral (slide-over) com timeline de atividades, contatos, valor, tags e histórico.
-- **Sidebar**: colapsável, ícones com tooltips, ativa conforme rota.
+- **Kanban de Pipeline**: colunas com cards de leads arrastáveis (dnd-kit), animações de transição (Framer Motion).
+- **Lead Detail**: painel lateral (slide-over) com timeline de atividades, contatos, valor, tags.
+- **Sidebar**: colapsável, ícones com tooltips, destaque por rota ativa.
 - **Animações**: page transitions com `AnimatePresence`, skeleton loaders, hover states suaves.
-- **Paleta**: tons neutros escuros (#1a1a2e, #16213e) com accent azul/roxo vibrante — moderno e profissional.
+- **Paleta**: tons escuros neutros (#1a1a2e, #16213e) com accent azul/roxo vibrante.
 
 ---
 
 ## 8. Fluxos de Negócio Críticos
 
 ### 8.1 Cadastro de Cliente (Tenant)
-
 ```
-Reseller → POST /tenants → Cria Tenant + Admin User → Envia email de boas-vindas
-                         → Associa Plano
-                         → Cria Pipeline padrão
+Reseller → POST /tenants
+  → Cria Tenant + UserIdentity + UserProfile + UserAuthorization (role: ACCOUNT_ADMIN)
+  → Associa Plano (verifica limites)
+  → Cria Pipeline padrão
+  → Envia email de boas-vindas com senha temporária (Password.generate())
+  → Grava AuditLog
 ```
 
 ### 8.2 Gestão de Leads
-
 ```
-Lead criado → Vai para Stage inicial do Pipeline
-           → Pode ser movido entre stages (Kanban drag/drop)
-           → Atividades são registradas na timeline
-           → Automações disparam (ex: email ao entrar em stage X)
-           → Lead pode ser ganho (WON) ou perdido (LOST)
+Lead criado → Stage inicial do Pipeline
+  → Movimentação via drag & drop (Kanban) → PATCH /leads/:id/stage
+  → Atividades registradas na timeline
+  → Automações disparam assincronamente (Bull Queue)
+  → Lead pode ser ganho (WON) ou perdido (LOST)
 ```
 
-### 8.3 Billing / Planos
-
+### 8.3 Impersonation
 ```
-Tenant tem um Plan → Plan define: maxUsers, maxLeads, features
-Reseller pode atualizar o plan de um Tenant
-Limites são checados via Guard antes de criar recursos
+Reseller → POST /auth/impersonate/:tenantId
+  → Valida role RESELLER
+  → Gera impersonation JWT (30min) + cria UserSession (isImpersonation: true)
+  → Frontend: troca token, exibe banner
+  → Toda ação: AuditLog com impersonated: true + impersonatorId
+  → POST /auth/impersonate/end → revoga UserSession, restaura token reseller
 ```
 
 ---
 
 ## 9. Segurança
 
-- Senhas com bcrypt (salt rounds 12).
-- Rate limiting via `@nestjs/throttler` (ex: 5 tentativas de login por minuto).
+- Senhas com bcryptjs (salt rounds 12).
+- Rate limiting: `@nestjs/throttler` (5 tentativas de login/minuto).
+- Bloqueio de conta: `UserIdentity.lockAccount()` após 5 falhas consecutivas.
 - CORS configurado para domínios específicos.
 - Helmet para headers HTTP seguros.
-- Toda impersonation logada em `audit_logs` com imutabilidade (sem delete/update).
-- Validação de input com `class-validator` + `class-transformer` em todos os DTOs.
-- Queries sempre filtradas por `tenantId` — impossível vazar dados de outro tenant.
+- Impersonation: sempre logado, `AuditLog` imutável (sem DELETE/UPDATE).
+- Refresh Token: apenas hash SHA256 persiste — raw token nunca no banco.
+- Queries sempre filtradas por `tenantId` — isolamento garantido por middleware Prisma.
+- Input validado com `class-validator` + `class-transformer` em todos os DTOs.
+- Either Pattern: erros de domínio nunca escapam como exceções inesperadas.
 
 ---
 
-## 10. Roadmap de Implementação
+## 10. Decisões de Arquitetura — ADRs
+
+| Decisão | Escolha | Motivo |
+|---------|---------|--------|
+| Multi-tenancy | Row-level (tenantId) | Simples, adequado para início. Schema-per-tenant pode ser adotado depois se necessário. |
+| User aggregate | Split em 3 (Identity/Profile/Authorization) | Separação de responsabilidades, cada aggregate evolui independente. |
+| Error handling | Either Pattern | Erros são valores tipados — sem throws não controlados, fácil de testar. |
+| Testes unitários | In-memory repositories | Zero I/O, rápidos, sem acoplamento ao Prisma. |
+| Testes integração | Testcontainers (PostgreSQL real) | Evita divergência entre mocks e banco real. |
+| ORM | Prisma | DX excelente, type-safety, migrations confiáveis. |
+| Cache/Filas | Redis + Bull | Sessões, rate limiting, processamento assíncrono. |
+| Auth | JWT (15min) + Refresh httpOnly (7d) | Seguro, stateless, compatível com SSR Next.js. |
+| Refresh Token storage | Hash SHA256 no banco | Token raw nunca persiste — mitigação de vazamento de banco. |
+| State frontend | Zustand + TanStack Query | Zustand para UI, TanStack Query para server state — separação clara. |
+
+---
+
+## 11. Roadmap de Implementação
 
 ### Fase 1 — Fundação (Semanas 1-3)
 - [ ] Setup Docker Compose + PostgreSQL + Redis
-- [ ] Setup NestJS com estrutura DDD base
+- [ ] Setup NestJS com estrutura DDD base + Either Pattern
 - [ ] Schema Prisma inicial + migrations
-- [ ] Módulo Auth (login, register, JWT, refresh token)
-- [ ] Módulo Tenants (CRUD básico)
-- [ ] Módulo Users com roles
-- [ ] Impersonation básico
+- [ ] Módulo Auth: UserIdentity, UserProfile, UserAuthorization
+- [ ] Value Objects: Email, Password, UserRole, SessionToken
+- [ ] In-memory repositories para testes
+- [ ] Use cases: CreateUser, AuthenticateUser, RefreshToken
+- [ ] Impersonation: ImpersonateUseCase + UserSession
 - [ ] Setup Jest (unit + integration + e2e)
 - [ ] Setup Next.js + Tailwind + shadcn
 - [ ] Telas de Login e Dashboard base
 
 ### Fase 2 — Core CRM (Semanas 4-7)
-- [ ] Módulo Leads (CRUD completo)
-- [ ] Módulo Pipelines + Stages
-- [ ] Módulo Activities (notas, tarefas, ligações)
-- [ ] Módulo Contacts
+- [ ] Módulo Leads + Pipelines + Stages
+- [ ] Módulo Activities + Contacts
 - [ ] Kanban board com drag & drop
-- [ ] Lead detail slide-over
-- [ ] Timeline de atividades
-- [ ] Filtros e busca de leads
-- [ ] Testes unitários e integração do core
+- [ ] Lead detail slide-over com timeline
+- [ ] Filtros e busca (Criteria Pattern nos leads)
+- [ ] Testes unitários + integração do core
 
 ### Fase 3 — SaaS Features (Semanas 8-11)
-- [ ] Módulo Plans + limites
+- [ ] Módulo Plans + limites por plano
 - [ ] Painel Reseller (gestão de clientes)
-- [ ] Impersonation completo no frontend
-- [ ] Módulo Automations (regras de pipeline)
-- [ ] Notificações em tempo real (WebSocket)
+- [ ] Impersonation completo no frontend (banner, troca de token)
+- [ ] Módulo Automations (regras de pipeline via Bull)
+- [ ] Notificações em tempo real (Socket.io)
 - [ ] Módulo Integrations (webhooks outbound)
-- [ ] Audit Logs UI para reseller
+- [ ] AuditLog UI para reseller
 - [ ] Testes e2e dos fluxos SaaS
 
 ### Fase 4 — Polimento (Semanas 12-14)
-- [ ] Animações e UX refinados
+- [ ] Animações e UX refinados (Framer Motion)
 - [ ] Performance (query optimization, caching Redis)
-- [ ] Monitoramento (logs estruturados, health checks)
+- [ ] Logs estruturados + health checks
 - [ ] Documentação da API (Swagger/OpenAPI)
 - [ ] CI/CD básico
 - [ ] Cobertura de testes ≥ 85%
 
 ---
 
-## 11. Decisões de Arquitetura — ADRs Resumidos
-
-| Decisão | Escolha | Motivo |
-|---------|---------|--------|
-| Multi-tenancy | Row-level (tenantId) | Simples de implementar, adequado para início. Schema-per-tenant pode ser adotado depois se necessário. |
-| ORM | Prisma | DX excelente, type-safety, migrations confiáveis. |
-| Cache | Redis | Sessões, rate limiting, filas (Bull). |
-| Filas | Bull (Redis-based) | Emails, webhooks, automações assíncronas. |
-| Auth | JWT + httpOnly cookie | Seguro, stateless, compatível com SSR do Next.js. |
-| State frontend | Zustand + TanStack Query | Zustand para UI state, TanStack Query para server state — separação clara. |
-| DDD | Hexagonal + CQRS leve | Testável, desacoplado, evolui para CQRS completo sem reescrita. |
-
----
-
-*Documento gerado em 2026-04-06. Sujeito a revisão conforme o projeto evolui.*
+*Versão 1.1 — atualizado em 2026-04-06 com padrões do projeto revalida-italia-back.*
