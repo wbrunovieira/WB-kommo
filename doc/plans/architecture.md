@@ -828,6 +828,7 @@ describe('Auth (e2e)', () => {
 |-----------|-----|
 | Next.js 15 (App Router) | Framework principal, RSC |
 | TypeScript | Tipagem forte |
+| **next-intl** | Internacionalização (pt, en, it, es) — RSC-first, mensagens tipadas |
 | Tailwind CSS 4 | Estilização utility-first |
 | Framer Motion | Animações suaves (drag & drop, transições) |
 | shadcn/ui | Componentes base acessíveis |
@@ -838,43 +839,195 @@ describe('Auth (e2e)', () => {
 | Socket.io Client | Notificações em tempo real |
 | @dnd-kit | Drag & drop no Kanban |
 
-### 7.2 Estrutura de Pastas
+### 7.2 Internacionalização — next-intl
+
+**Idiomas suportados:** `pt` (padrão), `en`, `it`, `es`
+
+#### Roteamento
+
+next-intl com **localização no path** (`/pt/...`, `/en/...`, etc.) via middleware. O locale padrão (`pt`) pode ser configurado com ou sem prefixo dependendo da preferência.
+
+```
+src/
+├── i18n/
+│   ├── routing.ts            # defineRouting com locales e defaultLocale
+│   ├── request.ts            # getRequestConfig — carrega mensagens por locale
+│   └── navigation.ts         # Link, redirect, useRouter tipados com locale
+├── messages/
+│   ├── pt.json
+│   ├── en.json
+│   ├── it.json
+│   └── es.json
+└── middleware.ts             # createMiddleware(routing) — detecta e redireciona locale
+```
+
+#### Configuração de roteamento
+
+```typescript
+// src/i18n/routing.ts
+import { defineRouting } from 'next-intl/routing'
+
+export const routing = defineRouting({
+  locales: ['pt', 'en', 'it', 'es'],
+  defaultLocale: 'pt',
+  localePrefix: 'as-needed',   // /pt omitido, /en /it /es explícitos
+})
+```
+
+```typescript
+// src/i18n/request.ts
+import { getRequestConfig } from 'next-intl/server'
+import { routing } from './routing'
+
+export default getRequestConfig(async ({ requestLocale }) => {
+  const locale = (await requestLocale) ?? routing.defaultLocale
+  return {
+    locale,
+    messages: (await import(`../messages/${locale}.json`)).default,
+  }
+})
+```
+
+```typescript
+// src/middleware.ts
+import createMiddleware from 'next-intl/middleware'
+import { routing } from './i18n/routing'
+
+export default createMiddleware(routing)
+
+export const config = {
+  matcher: ['/((?!api|_next|_vercel|.*\\..*).*)'],
+}
+```
+
+#### Estrutura de mensagens
+
+```json
+// messages/pt.json
+{
+  "common": {
+    "save": "Salvar",
+    "cancel": "Cancelar",
+    "delete": "Excluir",
+    "loading": "Carregando...",
+    "noResults": "Nenhum resultado encontrado"
+  },
+  "auth": {
+    "login": "Entrar",
+    "logout": "Sair",
+    "email": "E-mail",
+    "password": "Senha",
+    "forgotPassword": "Esqueceu a senha?"
+  },
+  "leads": {
+    "title": "Leads",
+    "newLead": "Novo Lead",
+    "status": {
+      "open": "Aberto",
+      "won": "Ganho",
+      "lost": "Perdido"
+    }
+  },
+  "pipeline": {
+    "title": "Pipeline",
+    "stage": "Estágio",
+    "moveToStage": "Mover para {stage}"
+  },
+  "impersonation": {
+    "banner": "Visualizando como: {clientName}",
+    "exit": "Sair da visualização"
+  }
+}
+```
+
+#### Uso em Server Components (RSC)
+
+```typescript
+// app/[locale]/(workspace)/leads/page.tsx
+import { getTranslations } from 'next-intl/server'
+
+export default async function LeadsPage() {
+  const t = await getTranslations('leads')
+  return <h1>{t('title')}</h1>
+}
+```
+
+#### Uso em Client Components
+
+```typescript
+'use client'
+import { useTranslations } from 'next-intl'
+
+export function LeadCard({ lead }: { lead: Lead }) {
+  const t = useTranslations('leads')
+  return <span>{t('status.open')}</span>
+}
+```
+
+#### Type-safety das mensagens
+
+```typescript
+// Geração automática de tipos a partir das mensagens
+// next-intl infere os tipos de messages/pt.json como fonte da verdade
+// t('leads.nonExistent') → erro de TypeScript em tempo de desenvolvimento
+```
+
+#### Seletor de idioma no Header
+
+- Dropdown com bandeiras/nomes dos idiomas.
+- Troca de locale via `useRouter` + `usePathname` do `next-intl/navigation`.
+- Preferência persistida em cookie (lida pelo middleware para redirect automático).
+- Locale do usuário também sincronizado com o campo `language` do `UserProfile` no backend.
+
+### 7.3 Estrutura de Pastas (com i18n)
 
 ```
 frontend/src/
 ├── app/
-│   ├── (auth)/
-│   │   ├── login/page.tsx
-│   │   └── layout.tsx
-│   ├── (reseller)/               # Área exclusiva do reseller
-│   │   ├── dashboard/page.tsx
-│   │   ├── clients/page.tsx
-│   │   ├── clients/[id]/page.tsx
-│   │   └── layout.tsx
-│   ├── (workspace)/              # Área do tenant
-│   │   ├── leads/page.tsx
-│   │   ├── pipeline/[id]/page.tsx
-│   │   ├── contacts/page.tsx
-│   │   ├── activities/page.tsx
-│   │   ├── settings/
-│   │   └── layout.tsx
-│   └── layout.tsx
+│   └── [locale]/                 # Segmento dinâmico de locale
+│       ├── layout.tsx            # NextIntlClientProvider aqui
+│       ├── (auth)/
+│       │   ├── login/page.tsx
+│       │   └── layout.tsx
+│       ├── (reseller)/
+│       │   ├── dashboard/page.tsx
+│       │   ├── clients/page.tsx
+│       │   ├── clients/[id]/page.tsx
+│       │   └── layout.tsx
+│       └── (workspace)/
+│           ├── leads/page.tsx
+│           ├── pipeline/[id]/page.tsx
+│           ├── contacts/page.tsx
+│           ├── activities/page.tsx
+│           ├── settings/
+│           └── layout.tsx
+├── i18n/
+│   ├── routing.ts
+│   ├── request.ts
+│   └── navigation.ts             # Link/redirect/useRouter tipados
+├── messages/
+│   ├── pt.json                   # Fonte da verdade (tipos gerados a partir daqui)
+│   ├── en.json
+│   ├── it.json
+│   └── es.json
 ├── components/
-│   ├── ui/                       # shadcn/ui wrappers
-│   ├── layout/                   # Sidebar, Header, Nav
-│   ├── kanban/                   # Pipeline Kanban board
-│   ├── lead/                     # Lead card, lead detail
-│   └── shared/                   # Badges, Avatars, EmptyState
-├── features/                     # Feature slices por domínio
+│   ├── ui/
+│   ├── layout/
+│   │   └── locale-switcher.tsx   # Seletor de idioma
+│   ├── kanban/
+│   ├── lead/
+│   └── shared/
+├── features/
 │   ├── auth/
 │   ├── leads/
 │   ├── pipeline/
 │   └── tenants/
 ├── lib/
-│   ├── api/                      # Fetch wrappers tipados
-│   ├── hooks/                    # Hooks customizados
-│   ├── stores/                   # Zustand stores
+│   ├── api/
+│   ├── hooks/
+│   ├── stores/
 │   └── utils/
+├── middleware.ts
 └── styles/
     └── globals.css
 ```
@@ -958,6 +1111,7 @@ Reseller → POST /auth/impersonate/:tenantId
 | Cache/Filas | Redis + Bull | Sessões, rate limiting, processamento assíncrono. |
 | Auth | JWT (15min) + Refresh httpOnly (7d) | Seguro, stateless, compatível com SSR Next.js. |
 | Refresh Token storage | Hash SHA256 no banco | Token raw nunca persiste — mitigação de vazamento de banco. |
+| i18n | next-intl (`[locale]` segment) | RSC-first, mensagens tipadas, middleware de detecção automática, suporte a `pt`, `en`, `it`, `es`. |
 | State frontend | Zustand + TanStack Query | Zustand para UI, TanStack Query para server state — separação clara. |
 
 ---
