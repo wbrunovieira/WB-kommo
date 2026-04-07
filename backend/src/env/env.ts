@@ -18,6 +18,10 @@ export const envSchema = z.object({
   RATE_LIMIT_AUTH_WINDOW_SECONDS: z.coerce.number().default(60),
 
   STORAGE_TYPE: z.enum(['local', 's3']).default('local'),
+
+  SEED_RESELLER_NAME: z.string().optional(),
+  SEED_RESELLER_EMAIL: z.string().email().optional(),
+  SEED_RESELLER_PASSWORD: z.string().optional(),
 })
 
 export type Env = z.infer<typeof envSchema>

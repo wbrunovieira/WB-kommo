@@ -14,4 +14,4 @@ RUN pnpm prisma generate
 
 EXPOSE 3001
 
-CMD ["pnpm", "start:dev"]
+ENTRYPOINT ["sh", "entrypoint.dev.sh"]
