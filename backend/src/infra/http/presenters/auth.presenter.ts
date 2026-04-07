@@ -1,17 +1,37 @@
-export interface AuthTokensHttp {
-  accessToken: string
-  refreshToken: string
-  tokenType: 'Bearer'
-  userId: string
-  tenantId: string
-  role: string
+import { ApiProperty } from '@nestjs/swagger'
+
+export class AuthTokensResponse {
+  @ApiProperty({ example: 'eyJhbGciOiJIUzI1NiJ9...' })
+  accessToken!: string
+
+  @ApiProperty()
+  refreshToken!: string
+
+  @ApiProperty({ example: 'Bearer' })
+  tokenType!: 'Bearer'
+
+  @ApiProperty({ example: 'user-uuid' })
+  userId!: string
+
+  @ApiProperty({ example: 'tenant-uuid' })
+  tenantId!: string
+
+  @ApiProperty({ enum: ['RESELLER', 'ACCOUNT_ADMIN', 'MEMBER'] })
+  role!: string
 }
 
-export interface RegisteredUserHttp {
-  userId: string
-  email: string
-  name: string
-  role: string
+export class RegisteredUserResponse {
+  @ApiProperty({ example: 'user-uuid' })
+  userId!: string
+
+  @ApiProperty({ example: 'alice@company.com' })
+  email!: string
+
+  @ApiProperty({ example: 'Alice Smith' })
+  name!: string
+
+  @ApiProperty({ enum: ['RESELLER', 'ACCOUNT_ADMIN', 'MEMBER'] })
+  role!: string
 }
 
 export class AuthPresenter {
@@ -21,7 +41,7 @@ export class AuthPresenter {
     userId: string
     tenantId: string
     role: string
-  }): AuthTokensHttp {
+  }): AuthTokensResponse {
     return {
       accessToken: data.accessToken,
       refreshToken: data.refreshToken,
@@ -37,7 +57,7 @@ export class AuthPresenter {
     email: string
     name: string
     role: string
-  }): RegisteredUserHttp {
+  }): RegisteredUserResponse {
     return {
       userId: data.userId,
       email: data.email,
