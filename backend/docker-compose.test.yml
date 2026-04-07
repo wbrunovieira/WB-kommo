@@ -3,13 +3,13 @@ services:
     image: postgres:16-alpine
     container_name: wb-kommo-postgres-test
     environment:
-      POSTGRES_USER: wb_user
-      POSTGRES_PASSWORD: wb_pass
-      POSTGRES_DB: wb_kommo_test
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_TEST_DB}
     tmpfs:
       - /var/lib/postgresql/data   # in-memory, throwaway
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U wb_user -d wb_kommo_test"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_TEST_DB}"]
       interval: 3s
       timeout: 5s
       retries: 15
@@ -23,8 +23,8 @@ services:
     container_name: wb-kommo-test-runner
     environment:
       NODE_ENV: test
-      DATABASE_URL: postgresql://wb_user:wb_pass@postgres-test:5432/wb_kommo_test
-      SESSION_JWT_SECRET: test-session-secret-minimum-32-chars-ok
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres-test:5432/${POSTGRES_TEST_DB}
+      SESSION_JWT_SECRET: ${SESSION_JWT_SECRET}
       REDIS_URL: redis://localhost:6379
       CORS_ORIGINS: http://localhost:3000
       STORAGE_TYPE: local

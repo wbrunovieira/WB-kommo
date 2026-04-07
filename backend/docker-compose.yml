@@ -9,9 +9,9 @@ services:
     environment:
       NODE_ENV: development
       PORT: 3001
-      DATABASE_URL: postgresql://wb_user:wb_pass@postgres:5432/wb_kommo_db?schema=public
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
       REDIS_URL: redis://redis:6379
-      SESSION_JWT_SECRET: dev-session-secret-minimum-32-chars-here
+      SESSION_JWT_SECRET: ${SESSION_JWT_SECRET}
       JWT_PRIVATE_KEY_PATH: /app/keys/private.pem
       JWT_PUBLIC_KEY_PATH: /app/keys/public.pem
       CORS_ORIGINS: http://localhost:3000
@@ -34,15 +34,15 @@ services:
     image: postgres:16-alpine
     container_name: wb-kommo-postgres
     environment:
-      POSTGRES_USER: wb_user
-      POSTGRES_PASSWORD: wb_pass
-      POSTGRES_DB: wb_kommo_db
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U wb_user -d wb_kommo_db"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10
