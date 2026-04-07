@@ -6,7 +6,7 @@ describe('SessionToken VO', () => {
     it('should generate a raw token and its SHA256 hash', () => {
       const token = SessionToken.generate()
       expect(token.rawToken).toBeDefined()
-      expect(token.rawToken.length).toBeGreaterThan(20)
+      expect(token.rawToken!.length).toBeGreaterThan(20)
       expect(token.hash).toBeDefined()
       expect(token.hash).not.toBe(token.rawToken)
     })

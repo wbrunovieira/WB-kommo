@@ -1,4 +1,4 @@
-import { Either, right } from '@/core/errors/either'
+import { Either, left, right } from '@/core/errors/either'
 import {
   IUserAggregatedViewRepository,
   UserAggregatedView,
@@ -21,17 +21,17 @@ export class InMemoryUserAggregatedViewRepository implements IUserAggregatedView
   ): Promise<Either<Error, UserAggregatedView | null>> {
     const emailVO = Email.createTrusted(email)
     const identityResult = await this.identityRepo.findByEmail(tenantId, emailVO)
-    if (identityResult.isLeft()) return identityResult
+    if (identityResult.isLeft()) return left(identityResult.value)
     const identity = identityResult.value
     if (!identity) return right(null)
 
     const profileResult = await this.profileRepo.findByIdentityId(identity.id.toString())
-    if (profileResult.isLeft()) return profileResult
+    if (profileResult.isLeft()) return left(profileResult.value)
     const profile = profileResult.value
     if (!profile) return right(null)
 
     const authResult = await this.authorizationRepo.findByIdentityId(identity.id.toString())
-    if (authResult.isLeft()) return authResult
+    if (authResult.isLeft()) return left(authResult.value)
     const authorization = authResult.value
     if (!authorization) return right(null)
 

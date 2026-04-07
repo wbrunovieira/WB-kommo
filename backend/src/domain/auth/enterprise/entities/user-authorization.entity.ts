@@ -46,6 +46,7 @@ export class UserAuthorization extends Entity<UserAuthorizationProps> {
   get role(): UserRole { return this.props.role }
   get customPermissions(): string[] { return this.props.customPermissions }
   get restrictions(): string[] { return this.props.restrictions }
+  get effectiveFrom(): Date { return this.props.effectiveFrom }
   get effectiveUntil(): Date | undefined { return this.props.effectiveUntil }
 
   isActive(): boolean {

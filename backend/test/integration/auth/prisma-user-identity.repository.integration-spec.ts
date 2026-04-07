@@ -45,6 +45,7 @@ describe('PrismaUserIdentityRepository (integration)', () => {
 
       const findResult = await repo.findById(identity.id)
       expect(findResult.isRight()).toBe(true)
+      if (!findResult.isRight()) throw new Error('expected right')
       expect(findResult.value).not.toBeNull()
       expect(findResult.value?.email.value).toBe('alice@test.com')
     })
@@ -63,6 +64,7 @@ describe('PrismaUserIdentityRepository (integration)', () => {
 
       const result = await repo.findByEmail(TENANT_ID, Email.createTrusted('bob@test.com'))
       expect(result.isRight()).toBe(true)
+      if (!result.isRight()) throw new Error('expected right')
       expect(result.value?.id.toString()).toBe(identity.id.toString())
     })
 
@@ -113,6 +115,7 @@ describe('PrismaUserIdentityRepository (integration)', () => {
       await repo.save(identity)
 
       const result = await repo.findById(identity.id)
+      if (!result.isRight()) throw new Error('expected right')
       expect(result.value?.failedLoginAttempts).toBe(2)
     })
   })
@@ -124,6 +127,7 @@ describe('PrismaUserIdentityRepository (integration)', () => {
       await repo.save(identity)
 
       const result = await repo.findById(identity.id)
+      if (!result.isRight()) throw new Error('expected right')
       expect(result.value?.isLocked()).toBe(true)
     })
   })
