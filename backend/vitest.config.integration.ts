@@ -16,20 +16,16 @@ export default defineConfig({
   ],
   test: {
     globals: true,
-    root: './src',
-    include: ['**/*.spec.ts'],
-    exclude: ['**/*.e2e-spec.ts'],
+    include: ['test/integration/**/*.integration-spec.ts'],
+    setupFiles: ['./test/setup-integration.ts'],
     environment: 'node',
-    coverage: {
-      provider: 'v8',
-      reporter: ['text', 'lcov', 'html'],
-      thresholds: {
-        lines: 85,
-        functions: 85,
-        branches: 80,
+    testTimeout: 60_000,
+    hookTimeout: 120_000,
+    pool: 'forks',
+    poolOptions: {
+      forks: {
+        maxForks: 1,
       },
-      include: ['src/domain/**/application/**', 'src/domain/**/enterprise/**'],
-      exclude: ['**/*.dto.ts', '**/*.module.ts', '**/index.ts', 'src/test/**'],
     },
   },
 })

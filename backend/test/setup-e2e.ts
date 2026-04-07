@@ -9,7 +9,7 @@ const schemaUrl = `${baseUrl.split('?')[0]}?schema=${schemaId}`
 beforeAll(async () => {
   process.env.DATABASE_URL = schemaUrl
 
-  execSync('npx prisma migrate deploy', {
+  execSync('npx prisma db push --force-reset', {
     env: { ...process.env, DATABASE_URL: schemaUrl },
     stdio: 'inherit',
   })
