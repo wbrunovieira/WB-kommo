@@ -1,6 +1,26 @@
 # WB-Kommo — CRM SaaS: Documento de Arquitetura
 
-> Versão 1.5 — 2026-04-07
+> Versão 1.7 — 2026-04-07
+
+---
+
+> **Estado atual de implementação — 2026-04-07**
+>
+> | Camada | Status |
+> |--------|--------|
+> | Core (Either, Entity, VO base) | ✅ Implementado |
+> | Auth domain — entities + VOs | ✅ Implementado |
+> | Auth application — use cases + repos | ✅ Implementado |
+> | Auth infra — Prisma repos + mappers | ✅ Implementado |
+> | Auth HTTP — controller + DTOs + presenter | ✅ Implementado |
+> | Swagger — rotas de auth documentadas | ✅ Implementado |
+> | GlobalExceptionFilter (RFC 7807) | ✅ Implementado |
+> | Testes — 155 passando (unit + integration + E2E) | ✅ Implementado |
+> | Docker dev + Docker testes isolados | ✅ Implementado |
+> | TypeScript sem erros (`tsc --noEmit` limpo) | ✅ Implementado |
+> | Logging estruturado (nestjs-pino) | 📋 Planejado (Fase 4) |
+> | Frontend (Next.js 15) | ⬜ Não iniciado |
+> | Módulos CRM (leads, pipelines, activities) | ⬜ Não iniciado |
 
 ---
 
@@ -1798,15 +1818,21 @@ Reseller → POST /auth/impersonate/:tenantId
 ## 11. Roadmap de Implementação
 
 ### Fase 1 — Fundação (Semanas 1-3)
-- [ ] Setup Docker Compose + PostgreSQL + Redis
-- [ ] Setup NestJS com estrutura DDD base + Either Pattern
-- [ ] Schema Prisma inicial + migrations
-- [ ] Módulo Auth: UserIdentity, UserProfile, UserAuthorization
-- [ ] Value Objects: Email, Password, UserRole, SessionToken
-- [ ] In-memory repositories para testes
-- [ ] Use cases: CreateUser, AuthenticateUser, RefreshToken
-- [ ] Impersonation: ImpersonateUseCase + UserSession
-- [ ] Setup Vitest (unit + integration + e2e)
+- [x] Setup Docker Compose + PostgreSQL + Redis (`docker-compose.yml` + `docker-compose.test.yml` com tmpfs isolado)
+- [x] Setup NestJS com estrutura DDD base + Either Pattern (core layer completo)
+- [x] Schema Prisma inicial (`prisma db push` — sem migration files ainda)
+- [x] Módulo Auth: UserIdentity, UserProfile, UserAuthorization (3 aggregates + UserSession)
+- [x] Value Objects: Email, Password, UserRole, SessionToken
+- [x] In-memory repositories para testes (identity, profile, authorization, session, aggregated view)
+- [x] Use cases: CreateUser, AuthenticateUser, RefreshToken, LogoutUser
+- [x] Impersonation: ImpersonateUseCase + EndImpersonationUseCase + UserSession
+- [x] Prisma repositories + mappers (identity, profile, authorization, session)
+- [x] Auth HTTP: AuthController + DTOs (Register, Login, RefreshToken) + AuthPresenter
+- [x] GlobalExceptionFilter com error-mappings RFC 7807
+- [x] Swagger: auth routes documentadas em inglês (`/docs`)
+- [x] Setup Vitest (unit + integration + e2e) — **155 testes passando**
+- [x] Docker testes isolados (Dockerfile.test + docker-compose.test.yml)
+- [x] TypeScript sem erros (`npx tsc --noEmit` limpo)
 - [ ] Setup Next.js + Tailwind + shadcn
 - [ ] Telas de Login e Dashboard base
 
@@ -1831,11 +1857,11 @@ Reseller → POST /auth/impersonate/:tenantId
 ### Fase 4 — Polimento (Semanas 12-14)
 - [ ] Animações e UX refinados (Framer Motion)
 - [ ] Performance (query optimization, caching Redis)
-- [ ] Logs estruturados + health checks
-- [ ] Documentação da API (Swagger/OpenAPI)
+- [ ] Logs estruturados + health checks (`nestjs-pino` + `pino-pretty` — stack decidida, correlation ID por request, contexto tenantId/userId)
+- [x] Documentação da API (Swagger/OpenAPI) — auth routes ✅ (demais módulos ao implementar)
 - [ ] CI/CD básico
 - [ ] Cobertura de testes ≥ 85%
 
 ---
 
-*Versão 1.6 — atualizado em 2026-04-07: erros tipados em `use-cases/errors/`, separação VO/Entity/UseCase, Domain Service vs Use Case, contrato de mappers com `createTrusted()`, error-mappings RFC 7807, testes unitários de controller, setup-e2e.ts com schema PostgreSQL isolado, pirâmide de testes revisada.*
+*Versão 1.7 — atualizado em 2026-04-07: status de implementação adicionado (tabela de estado atual + roadmap com checkboxes); Fase 1 completa — 155 testes passando, auth HTTP layer, Swagger, GlobalExceptionFilter RFC 7807, Docker testes isolados, TypeScript limpo; logging estruturado planejado para Fase 4 com `nestjs-pino`.*
