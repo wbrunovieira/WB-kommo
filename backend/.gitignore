@@ -1,0 +1,8 @@
+node_modules
+dist
+.env
+keys/
+coverage
+coverage-e2e
+*.log
+pnpm-lock.yaml

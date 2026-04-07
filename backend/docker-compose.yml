@@ -1,0 +1,75 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: wb-kommo-api
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      DATABASE_URL: postgresql://wb_user:wb_pass@postgres:5432/wb_kommo_db?schema=public
+      REDIS_URL: redis://redis:6379
+      SESSION_JWT_SECRET: dev-session-secret-minimum-32-chars-here
+      JWT_PRIVATE_KEY_PATH: /app/keys/private.pem
+      JWT_PUBLIC_KEY_PATH: /app/keys/public.pem
+      CORS_ORIGINS: http://localhost:3000
+      RATE_LIMIT_AUTH_MAX: 20
+      RATE_LIMIT_AUTH_WINDOW_SECONDS: 60
+      STORAGE_TYPE: local
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - wb-network
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: wb-kommo-postgres
+    environment:
+      POSTGRES_USER: wb_user
+      POSTGRES_PASSWORD: wb_pass
+      POSTGRES_DB: wb_kommo_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wb_user -d wb_kommo_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - wb-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: wb-kommo-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - wb-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  wb-network:
+    driver: bridge

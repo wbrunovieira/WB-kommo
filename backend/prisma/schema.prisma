@@ -1,0 +1,291 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "darwin-arm64", "linux-arm64-openssl-3.0.x", "linux-musl-arm64-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum RoleType {
+  RESELLER
+  ACCOUNT_ADMIN
+  MEMBER
+}
+
+enum LeadStatus {
+  OPEN
+  WON
+  LOST
+}
+
+enum ActivityType {
+  NOTE
+  CALL
+  EMAIL
+  TASK
+  MEETING
+}
+
+// ─── Plans ────────────────────────────────────────────────────────────────────
+
+model Plan {
+  id       String  @id @default(uuid())
+  name     String  // Starter | Pro | Enterprise
+  maxUsers Int
+  maxLeads Int     // -1 = ilimitado
+  price    Decimal @db.Decimal(10, 2)
+  features Json    @default("{}")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenants Tenant[]
+
+  @@map("plans")
+}
+
+// ─── Tenants ──────────────────────────────────────────────────────────────────
+
+model Tenant {
+  id       String  @id @default(uuid())
+  name     String
+  slug     String  @unique
+  planId   String
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  plan           Plan                @relation(fields: [planId], references: [id])
+  identities     UserIdentity[]
+  profiles       UserProfile[]
+  authorizations UserAuthorization[]
+  sessions       UserSession[]
+  leads          Lead[]
+  pipelines      Pipeline[]
+  auditLogs      AuditLog[]
+
+  @@index([slug])
+  @@map("tenants")
+}
+
+// ─── Users ────────────────────────────────────────────────────────────────────
+
+model UserIdentity {
+  id                     String    @id @default(uuid())
+  tenantId               String
+  email                  String
+  passwordHash           String
+  isEmailVerified        Boolean   @default(false)
+  emailVerificationToken String?
+  passwordResetToken     String?
+  passwordResetExpiresAt DateTime?
+  failedLoginAttempts    Int       @default(0)
+  lockedUntil            DateTime?
+  lastLoginAt            DateTime?
+  deletedAt              DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant        Tenant             @relation(fields: [tenantId], references: [id])
+  profile       UserProfile?
+  authorization UserAuthorization?
+  sessions      UserSession[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@index([emailVerificationToken])
+  @@index([passwordResetToken])
+  @@map("user_identities")
+}
+
+model UserProfile {
+  id         String    @id @default(uuid())
+  tenantId   String
+  identityId String    @unique
+  name       String
+  avatarUrl  String?
+  phone      String?
+  timezone   String    @default("America/Sao_Paulo")
+  language   String    @default("pt-BR")
+  deletedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  identity UserIdentity @relation(fields: [identityId], references: [id])
+  tenant   Tenant       @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@map("user_profiles")
+}
+
+model UserAuthorization {
+  id                String    @id @default(uuid())
+  tenantId          String
+  identityId        String    @unique
+  role              RoleType  @default(MEMBER)
+  customPermissions Json      @default("[]")
+  restrictions      Json      @default("[]")
+  effectiveFrom     DateTime  @default(now())
+  effectiveUntil    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  identity UserIdentity @relation(fields: [identityId], references: [id])
+  tenant   Tenant       @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, role])
+  @@map("user_authorizations")
+}
+
+model UserSession {
+  id               String    @id @default(uuid())
+  tenantId         String
+  identityId       String
+  refreshTokenHash String
+  ipAddress        String?
+  userAgent        String?
+  isImpersonation  Boolean   @default(false)
+  impersonatorId   String?
+  expiresAt        DateTime
+  revokedAt        DateTime?
+
+  createdAt DateTime @default(now())
+
+  identity UserIdentity @relation(fields: [identityId], references: [id])
+  tenant   Tenant       @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, identityId])
+  @@index([refreshTokenHash])
+  @@map("user_sessions")
+}
+
+// ─── Pipelines ────────────────────────────────────────────────────────────────
+
+model Pipeline {
+  id       String  @id @default(uuid())
+  tenantId String
+  name     String
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant  @relation(fields: [tenantId], references: [id])
+  stages Stage[]
+  leads  Lead[]
+
+  @@index([tenantId])
+  @@map("pipelines")
+}
+
+model Stage {
+  id         String  @id @default(uuid())
+  pipelineId String
+  name       String
+  order      Int
+  color      String?
+
+  pipeline Pipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  leads    Lead[]
+
+  @@index([pipelineId])
+  @@map("stages")
+}
+
+// ─── Leads ────────────────────────────────────────────────────────────────────
+
+model Lead {
+  id           String     @id @default(uuid())
+  tenantId     String
+  pipelineId   String
+  stageId      String
+  name         String
+  value        Decimal?   @db.Decimal(15, 2)
+  status       LeadStatus @default(OPEN)
+  assignedToId String?
+  customFields Json?
+  tags         String[]   @default([])
+  deletedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant     Tenant     @relation(fields: [tenantId], references: [id])
+  pipeline   Pipeline   @relation(fields: [pipelineId], references: [id])
+  stage      Stage      @relation(fields: [stageId], references: [id])
+  contacts   Contact[]
+  activities Activity[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, pipelineId])
+  @@index([tenantId, stageId])
+  @@map("leads")
+}
+
+model Contact {
+  id       String  @id @default(uuid())
+  tenantId String
+  leadId   String?
+  name     String
+  email    String?
+  phone    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lead Lead? @relation(fields: [leadId], references: [id])
+
+  @@index([tenantId])
+  @@map("contacts")
+}
+
+// ─── Activities ───────────────────────────────────────────────────────────────
+
+model Activity {
+  id        String       @id @default(uuid())
+  tenantId  String
+  leadId    String
+  userId    String
+  type      ActivityType
+  content   String
+  dueDate   DateTime?
+  completed Boolean      @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lead Lead @relation(fields: [leadId], references: [id])
+
+  @@index([tenantId, leadId])
+  @@map("activities")
+}
+
+// ─── Audit ────────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id             String  @id @default(uuid())
+  tenantId       String
+  userId         String
+  action         String
+  entity         String
+  entityId       String
+  payload        Json?
+  impersonated   Boolean @default(false)
+  impersonatorId String?
+
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, createdAt])
+  @@index([impersonated])
+  @@map("audit_logs")
+}
