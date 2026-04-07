@@ -22,6 +22,8 @@ import { AuthenticateUserUseCase } from '@/domain/auth/application/use-cases/aut
 import { RefreshTokenUseCase } from '@/domain/auth/application/use-cases/refresh-token/refresh-token.use-case'
 import { LogoutUseCase } from '@/domain/auth/application/use-cases/logout/logout.use-case'
 import { ImpersonateUserUseCase } from '@/domain/auth/application/use-cases/impersonate-user/impersonate-user.use-case'
+import { ITenantRepository } from '@/domain/tenants/application/repositories/i-tenant.repository'
+import { TenantNotFoundError } from '@/domain/auth/application/use-cases/errors/tenant-not-found.error'
 import { CurrentUser, CurrentUserPayload } from '@/infra/auth/decorators/current-user.decorator'
 import { Public } from '@/infra/auth/decorators/public.decorator'
 import { Roles } from '@/infra/auth/decorators/roles.decorator'
@@ -39,6 +41,7 @@ export class AuthController {
     private readonly refreshTokenUseCase: RefreshTokenUseCase,
     private readonly logoutUseCase: LogoutUseCase,
     private readonly impersonateUseCase: ImpersonateUserUseCase,
+    private readonly tenantRepository: ITenantRepository,
     private readonly jwtService: JwtService,
   ) {}
 
@@ -75,10 +78,17 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Login successful.', type: AuthTokensResponse })
   @ApiResponse({ status: 400, description: 'Invalid request body.' })
   @ApiResponse({ status: 401, description: 'Invalid credentials.' })
+  @ApiResponse({ status: 404, description: 'Workspace not found.' })
   @ApiResponse({ status: 423, description: 'Account temporarily locked after 5 failed attempts.' })
   async login(@Body() dto: LoginDto, @Req() req: Request) {
+    const tenantResult = await this.tenantRepository.findBySlug(dto.workspace)
+    if (tenantResult.isLeft()) throw tenantResult.value
+    if (!tenantResult.value) throw new TenantNotFoundError(dto.workspace)
+
+    const tenantId = tenantResult.value.id
+
     const result = await this.authenticateUseCase.execute({
-      tenantId: dto.tenantId,
+      tenantId,
       email: dto.email,
       password: dto.password,
       ipAddress: req.ip,
@@ -87,7 +97,7 @@ export class AuthController {
 
     if (result.isLeft()) throw result.value
 
-    const { userId, tenantId, role, refreshToken } = result.value
+    const { userId, role, refreshToken } = result.value
     const accessToken = this.jwtService.sign({ sub: userId, tenantId, role })
 
     return AuthPresenter.toTokens({ accessToken, refreshToken, userId, tenantId, role })

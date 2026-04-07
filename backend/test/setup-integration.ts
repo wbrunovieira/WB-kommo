@@ -30,7 +30,7 @@ beforeAll(async () => {
 
   process.env.DATABASE_URL = url
 
-  execSync('npx prisma db push --force-reset', {
+  execSync('npx prisma db push --force-reset --accept-data-loss', {
     env: { ...process.env, DATABASE_URL: url },
     stdio: 'inherit',
   })

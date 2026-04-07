@@ -37,6 +37,6 @@ import { ImpersonateUserUseCase } from '@/domain/auth/application/use-cases/impe
     LogoutUseCase,
     ImpersonateUserUseCase,
   ],
-  exports: [JwtAuthGuard, RolesGuard, JwtModule],
+  exports: [JwtAuthGuard, RolesGuard, JwtModule, DatabaseModule],
 })
 export class AuthModule {}

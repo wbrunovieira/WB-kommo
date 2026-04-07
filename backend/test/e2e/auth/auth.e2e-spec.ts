@@ -104,7 +104,7 @@ describe('Auth routes (E2E)', () => {
 
     it('200 — returns access + refresh tokens', async () => {
       const res = await request(app.getHttpServer()).post('/auth/login').send({
-        tenantId: TENANT_ID,
+        workspace: TENANT_ID,
         email: USER_EMAIL,
         password: USER_PASSWORD,
       })
@@ -117,7 +117,7 @@ describe('Auth routes (E2E)', () => {
 
     it('401 — rejects wrong password', async () => {
       const res = await request(app.getHttpServer()).post('/auth/login').send({
-        tenantId: TENANT_ID,
+        workspace: TENANT_ID,
         email: USER_EMAIL,
         password: 'WrongPass!9',
       })
@@ -127,7 +127,7 @@ describe('Auth routes (E2E)', () => {
 
     it('401 — rejects non-existent user', async () => {
       const res = await request(app.getHttpServer()).post('/auth/login').send({
-        tenantId: TENANT_ID,
+        workspace: TENANT_ID,
         email: 'ghost@e2e.com',
         password: 'Secret@123',
       })
@@ -146,14 +146,14 @@ describe('Auth routes (E2E)', () => {
 
       for (let i = 0; i < 5; i++) {
         await request(app.getHttpServer()).post('/auth/login').send({
-          tenantId: TENANT_ID,
+          workspace: TENANT_ID,
           email: lockedEmail,
           password: 'WrongPass!9',
         })
       }
 
       const res = await request(app.getHttpServer()).post('/auth/login').send({
-        tenantId: TENANT_ID,
+        workspace: TENANT_ID,
         email: lockedEmail,
         password: 'Secret@123',
       })
@@ -174,7 +174,7 @@ describe('Auth routes (E2E)', () => {
         role: 'MEMBER',
       })
       const loginRes = await request(app.getHttpServer()).post('/auth/login').send({
-        tenantId: TENANT_ID,
+        workspace: TENANT_ID,
         email: 'refresh@e2e.com',
         password: 'Secret@123',
       })
@@ -207,7 +207,7 @@ describe('Auth routes (E2E)', () => {
         role: 'MEMBER',
       })
       const loginRes = await request(app.getHttpServer()).post('/auth/login').send({
-        tenantId: TENANT_ID,
+        workspace: TENANT_ID,
         email: 'replay@e2e.com',
         password: 'Secret@123',
       })
@@ -237,7 +237,7 @@ describe('Auth routes (E2E)', () => {
         role: 'MEMBER',
       })
       const loginRes = await request(app.getHttpServer()).post('/auth/login').send({
-        tenantId: TENANT_ID,
+        workspace: TENANT_ID,
         email: 'logout@e2e.com',
         password: 'Secret@123',
       })
@@ -287,7 +287,7 @@ describe('Auth routes (E2E)', () => {
         role: 'RESELLER',
       })
       const resellerLogin = await request(app.getHttpServer()).post('/auth/login').send({
-        tenantId: TENANT_ID,
+        workspace: TENANT_ID,
         email: 'reseller@e2e.com',
         password: 'Secret@123',
       })
@@ -302,7 +302,7 @@ describe('Auth routes (E2E)', () => {
         role: 'MEMBER',
       })
       const memberLogin = await request(app.getHttpServer()).post('/auth/login').send({
-        tenantId: TENANT_ID,
+        workspace: TENANT_ID,
         email: 'member@e2e.com',
         password: 'Secret@123',
       })

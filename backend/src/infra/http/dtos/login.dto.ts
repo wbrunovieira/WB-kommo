@@ -2,9 +2,12 @@ import { ApiProperty } from '@nestjs/swagger'
 import { IsEmail, IsString, MinLength } from 'class-validator'
 
 export class LoginDto {
-  @ApiProperty({ example: 'tenant-uuid-123', description: 'Tenant ID' })
+  @ApiProperty({
+    example: 'wb-digital-solutions',
+    description: 'Workspace slug — identifies the tenant (visible in your account settings)',
+  })
   @IsString()
-  tenantId!: string
+  workspace!: string
 
   @ApiProperty({ example: 'alice@company.com' })
   @IsEmail()
