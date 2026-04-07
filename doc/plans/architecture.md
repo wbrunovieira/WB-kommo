@@ -1,6 +1,6 @@
 # WB-Kommo — CRM SaaS: Documento de Arquitetura
 
-> Versão 1.1 — 2026-04-06
+> Versão 1.5 — 2026-04-07
 
 ---
 
@@ -22,30 +22,120 @@ Sistema CRM SaaS para gestão de leads, inspirado no Kommo. O modelo de negócio
 
 ```
 WB-kommo/
-├── backend/                  # NestJS — DDD
+├── backend/
 │   ├── src/
-│   │   ├── modules/          # Bounded Contexts (domínios)
-│   │   ├── infrastructure/   # DB, cache, queue, mail, storage
-│   │   ├── shared/           # Utilitários, value objects, base classes
+│   │   ├── core/                     # Utilitários e contratos compartilhados
+│   │   │   ├── criteria/             # Base do Criteria Pattern
+│   │   │   ├── domain/
+│   │   │   │   ├── events/           # Base classes de Domain Events
+│   │   │   │   └── exceptions/       # Exceções de domínio base
+│   │   │   ├── errors/               # Either, Left, Right, AppError
+│   │   │   ├── repositories/         # Interfaces genéricas (IRepository)
+│   │   │   ├── types/                # Tipos utilitários globais
+│   │   │   └── utils/                # Helpers puros (uuid, date, etc.)
+│   │   │
+│   │   ├── domain/                   # Bounded Contexts — lógica de negócio pura
+│   │   │   ├── auth/
+│   │   │   ├── tenants/
+│   │   │   ├── users/
+│   │   │   ├── plans/
+│   │   │   ├── leads/
+│   │   │   ├── pipelines/
+│   │   │   ├── activities/
+│   │   │   ├── automations/
+│   │   │   └── notifications/
+│   │   │
+│   │   ├── infra/                    # Framework, DB, serviços externos
+│   │   │   ├── auth/
+│   │   │   │   ├── decorators/
+│   │   │   │   ├── guards/
+│   │   │   │   └── strategies/       # Passport JWT
+│   │   │   ├── cache/                # Redis
+│   │   │   ├── database/
+│   │   │   │   ├── prisma/
+│   │   │   │   │   ├── mappers/      # Domain ↔ Prisma
+│   │   │   │   │   ├── repositories/ # Implementações Prisma
+│   │   │   │   │   └── unit-of-work/ # Transações
+│   │   │   │   └── redis/
+│   │   │   ├── email/
+│   │   │   │   ├── adapters/
+│   │   │   │   └── listeners/
+│   │   │   ├── events/
+│   │   │   │   └── handlers/         # Event bus handlers
+│   │   │   ├── filters/              # HTTP exception filters
+│   │   │   │   └── error-mappings/
+│   │   │   ├── http/
+│   │   │   │   ├── controllers/      # Todos os HTTP controllers
+│   │   │   │   ├── dtos/             # Request/Response DTOs
+│   │   │   │   └── presenters/       # Response mappers
+│   │   │   ├── interceptors/
+│   │   │   ├── logger/               # Logs estruturados
+│   │   │   ├── modules/              # NestJS Modules (DI wiring)
+│   │   │   │   ├── auth.module.ts
+│   │   │   │   ├── tenants.module.ts
+│   │   │   │   ├── users.module.ts
+│   │   │   │   ├── leads.module.ts
+│   │   │   │   ├── pipelines.module.ts
+│   │   │   │   ├── plans.module.ts
+│   │   │   │   ├── activities.module.ts
+│   │   │   │   └── notifications.module.ts
+│   │   │   ├── queue/                # BullMQ workers e jobs
+│   │   │   ├── storage/              # S3 / local storage
+│   │   │   └── websocket/            # Socket.io gateways
+│   │   │
+│   │   ├── app.module.ts
 │   │   └── main.ts
+│   │
 │   ├── prisma/
 │   │   ├── schema.prisma
-│   │   └── migrations/
-│   ├── test/                 # Testes e2e
-│   ├── docker-compose.yml
-│   ├── Dockerfile
-│   └── .env.example
-├── frontend/                 # Next.js 15 (App Router)
+│   │   ├── migrations/
+│   │   └── seed.ts
+│   │
 │   ├── src/
-│   │   ├── app/              # Rotas (App Router)
-│   │   ├── components/       # UI components
-│   │   ├── features/         # Feature slices (por domínio)
-│   │   ├── lib/              # Clientes HTTP, hooks, utils
+│   │   └── test/                     # Utilitários de testes unitários (co-located com src)
+│   │       ├── repositories/         # In-memory repos reutilizáveis
+│   │       │   ├── in-memory-user-identity.repository.ts
+│   │       │   ├── in-memory-user-profile.repository.ts
+│   │       │   ├── in-memory-lead.repository.ts
+│   │       │   └── ...
+│   │       ├── factories/            # make-lead, make-tenant, make-user
+│   │       └── shared/               # Helpers, fixtures, setup global
+│   │
+│   ├── test/                         # Testes E2E (fora de src/)
+│   │   ├── e2e/
+│   │   │   ├── auth/
+│   │   │   ├── tenants/
+│   │   │   ├── leads/
+│   │   │   ├── pipelines/
+│   │   │   └── impersonation/
+│   │   └── setup-e2e.ts              # Schema PostgreSQL isolado por suite
+│   │
+│   ├── docker-compose.yml
+│   ├── Dockerfile.dev
+│   ├── Dockerfile.prod
+│   ├── vitest.config.ts              # Unitários + integração (inclui workspaces projects)
+│   ├── vitest.config.e2e.ts          # E2E separado (maxThreads: 5, setupFiles)
+│   ├── tsconfig.json
+│   ├── tsconfig.build.json
+│   ├── tsconfig.dev.json             # baseUrl + paths alias @/* → src/*
+│   ├── nest-cli.json
+│   └── .env.example
+│
+├── frontend/                         # Next.js 15 (App Router)
+│   ├── src/
+│   │   ├── app/[locale]/             # Rotas internacionalizadas
+│   │   ├── i18n/                     # next-intl config
+│   │   ├── messages/                 # pt.json, en.json, it.json, es.json
+│   │   ├── components/
+│   │   ├── features/
+│   │   ├── lib/
+│   │   ├── middleware.ts
 │   │   └── styles/
 │   └── .env.example
+│
 └── doc/
     └── plans/
-        └── architecture.md   # Este documento
+        └── architecture.md
 ```
 
 ---
@@ -76,11 +166,13 @@ src/modules/
 └── notifications/      # Notificações em tempo real (WebSocket/SSE)
 ```
 
-### 3.3 Estrutura Interna de cada Módulo (DDD)
+### 3.3 Estrutura Interna de cada Bounded Context
+
+Espelhando o revalida, cada domínio em `src/domain/{context}/` é dividido em duas camadas: **enterprise** (modelo puro) e **application** (orquestração). A infraestrutura fica em `src/infra/`.
 
 ```
-modules/users/
-├── domain/
+src/domain/users/
+├── enterprise/                          # Modelo de domínio puro (sem framework)
 │   ├── entities/
 │   │   ├── user-identity.entity.ts      # Auth: email, password, tokens, bloqueio
 │   │   ├── user-profile.entity.ts       # Dados pessoais: nome, avatar, timezone
@@ -90,46 +182,86 @@ modules/users/
 │   │   ├── password.vo.ts
 │   │   ├── user-role.vo.ts
 │   │   └── session-token.vo.ts
-│   ├── events/
-│   │   ├── user-created.event.ts
-│   │   └── user-impersonated.event.ts
+│   └── events/
+│       ├── user-created.event.ts
+│       └── user-impersonated.event.ts
+│
+└── application/                         # Casos de uso e contratos
+    ├── use-cases/
+    │   ├── create-user/
+    │   │   ├── create-user.use-case.ts
+    │   │   └── create-user.use-case.spec.ts   # TDD — spec ao lado do use case
+    │   ├── authenticate-user/
+    │   │   ├── authenticate-user.use-case.ts
+    │   │   └── authenticate-user.use-case.spec.ts
+    │   ├── impersonate-tenant/
+    │   │   ├── impersonate-tenant.use-case.ts
+    │   │   └── impersonate-tenant.use-case.spec.ts
+    │   └── errors/                          # Erros tipados retornados pelos use cases
+    │       ├── user-already-exists.error.ts
+    │       ├── invalid-credentials.error.ts
+    │       ├── account-locked.error.ts
+    │       └── weak-password.error.ts
+    ├── repositories/                    # Interfaces (Ports) — sem Prisma aqui
+    │   ├── i-user-identity.repository.ts
+    │   ├── i-user-profile.repository.ts
+    │   └── i-user-authorization.repository.ts
+    ├── services/                        # Domain services de aplicação
+    ├── mappers/                         # Domain ↔ DTO (sem Prisma)
+    │   └── user-profile.mapper.ts
+    ├── dtos/
+    │   ├── create-user.dto.ts
+    │   └── user-response.dto.ts
+    ├── criteria/
+    │   └── user-profile.criteria.ts     # Fluent query builder
+    └── event-handlers/
+        └── on-user-created.handler.ts
+```
+
+**Infraestrutura correspondente** em `src/infra/`:
+
+```
+src/infra/
+├── database/prisma/
 │   ├── repositories/
-│   │   ├── i-user-identity.repository.ts
-│   │   ├── i-user-profile.repository.ts
-│   │   └── i-user-authorization.repository.ts
-│   └── errors/
-│       ├── user-not-found.error.ts
-│       └── invalid-credentials.error.ts
-├── application/
-│   ├── use-cases/
-│   │   ├── create-user.use-case.ts
-│   │   ├── authenticate-user.use-case.ts
-│   │   └── impersonate-tenant.use-case.ts
-│   ├── dtos/
-│   │   ├── create-user.dto.ts
-│   │   └── user-response.dto.ts
-│   ├── mappers/
-│   │   ├── user-identity.mapper.ts
-│   │   ├── user-profile.mapper.ts
-│   │   └── user-authorization.mapper.ts
-│   └── criteria/
-│       └── user-profile.criteria.ts     # Fluent query builder
-├── infrastructure/
-│   ├── repositories/
-│   │   ├── prisma-user-identity.repository.ts
+│   │   ├── prisma-user-identity.repository.ts   # Implementa IUserIdentityRepository
 │   │   ├── prisma-user-profile.repository.ts
 │   │   └── prisma-user-authorization.repository.ts
-│   └── test/
-│       ├── in-memory-user-identity.repository.ts
-│       ├── in-memory-user-profile.repository.ts
-│       └── in-memory-user-authorization.repository.ts
-├── presentation/
-│   ├── users.controller.ts
-│   └── users.module.ts
-└── __tests__/
-    ├── unit/
-    ├── integration/
-    └── e2e/
+│   └── mappers/
+│       ├── prisma-user-identity.mapper.ts        # Domain ↔ Prisma model
+│       ├── prisma-user-profile.mapper.ts
+│       └── prisma-user-authorization.mapper.ts
+├── http/
+│   ├── controllers/
+│   │   ├── users.controller.ts
+│   │   └── users.controller.spec.ts              # Teste unitário — mock do use case
+│   └── presenters/
+│       └── user.presenter.ts
+└── modules/
+    └── users.module.ts                           # DI wiring NestJS
+```
+
+**In-memory repositories** (para testes unitários) em `src/test/`:
+
+```
+src/test/
+├── repositories/
+│   ├── in-memory-user-identity.repository.ts
+│   ├── in-memory-user-profile.repository.ts
+│   ├── in-memory-user-authorization.repository.ts
+│   ├── in-memory-lead.repository.ts
+│   └── in-memory-pipeline.repository.ts
+├── factories/
+│   ├── make-user.ts
+│   ├── make-tenant.ts
+│   ├── make-lead.ts
+│   └── make-pipeline.ts
+└── shared/
+    └── setup.ts                                  # beforeAll global, env test
+```
+
+> **Distinção importante**: `src/test/` contém utilitários para testes unitários (in-memory repos, factories).
+> `test/` (raiz do backend) contém apenas testes E2E e o `setup-e2e.ts`.
 ```
 
 ### 3.4 Design do Aggregate User — Split Aggregate Pattern
@@ -246,18 +378,30 @@ class UserRole {
   isReseller(): boolean
   isAccountAdmin(): boolean
   isMember(): boolean
+  isAdmin(): boolean   // true para RESELLER | ACCOUNT_ADMIN — atalho para guards
 
   // Permissões implícitas por role
   canManageAllTenants(): boolean    // apenas RESELLER
   canImpersonate(): boolean         // apenas RESELLER
-  canManageUsers(): boolean         // RESELLER | ACCOUNT_ADMIN
+
+  // Gestão de usuários — RESELLER cria em qualquer tenant, ACCOUNT_ADMIN cria no próprio tenant
+  canCreateUsers(): boolean         // RESELLER | ACCOUNT_ADMIN
+  canUpdateUsers(): boolean         // RESELLER | ACCOUNT_ADMIN
+  canDeleteUsers(): boolean         // RESELLER | ACCOUNT_ADMIN
+  canListUsers(): boolean           // RESELLER | ACCOUNT_ADMIN
+
   canManagePipelines(): boolean     // RESELLER | ACCOUNT_ADMIN
   canCreateLeads(): boolean         // todos
   canDeleteLeads(): boolean         // RESELLER | ACCOUNT_ADMIN
   canExportData(): boolean          // RESELLER | ACCOUNT_ADMIN
   canViewBilling(): boolean         // RESELLER | ACCOUNT_ADMIN
+  canAccessAdminPanel(): boolean    // RESELLER | ACCOUNT_ADMIN
 }
 ```
+
+**Regra de escopo na criação de usuários:**
+- `RESELLER` pode criar usuários em **qualquer tenant** (usado ao onboarding de um novo cliente).
+- `ACCOUNT_ADMIN` só pode criar usuários **dentro do próprio tenant** — enforcement via `TenantGuard`.
 
 #### `SessionToken`
 - Hash SHA256 do token para armazenamento seguro no banco
@@ -298,7 +442,83 @@ const criteria = new UserProfileCriteria()
 const users = await userProfileRepo.findByCriteria(criteria)
 ```
 
-### 3.8 Multi-tenancy
+### 3.8 CQRS — Aggregated View Repositories (Read Models)
+
+Para queries que precisam combinar múltiplos aggregates (ex: autenticação = identity + profile + authorization), cria-se um **repositório de view agregada** — uma query otimizada que retorna tudo de uma vez.
+
+```typescript
+// application/repositories/i-user-aggregated-view.repository.ts
+export abstract class IUserAggregatedViewRepository {
+  abstract findByEmail(email: string): Promise<Either<Error, UserAggregatedView | null>>
+}
+
+// Tipo de retorno (não é entity — é DTO de leitura)
+export interface UserAggregatedView {
+  identity: UserIdentity
+  profile: UserProfile
+  authorization: UserAuthorization
+}
+```
+
+**Implementação Prisma:**
+```typescript
+// infra/database/prisma/repositories/prisma-user-aggregated-view.repository.ts
+async findByEmail(email: string): Promise<Either<Error, UserAggregatedView | null>> {
+  const raw = await this.prisma.userIdentity.findFirst({
+    where: { email, deletedAt: null },
+    include: { profile: true, authorization: true },
+  })
+  if (!raw) return right(null)
+  return right({
+    identity: UserIdentityMapper.toDomain(raw),
+    profile: UserProfileMapper.toDomain(raw.profile!),
+    authorization: UserAuthorizationMapper.toDomain(raw.authorization!),
+  })
+}
+```
+
+> Padrão extraído do `revalida-italia-back`: evita N+1 em use cases de autenticação e qualquer operação que precise de contexto completo do usuário.
+
+### 3.9 Validação de Ambiente — Zod Schema
+
+Centralizada em `src/env/env.ts`, garante que a aplicação falhe imediatamente na inicialização se variáveis obrigatórias estiverem ausentes ou com tipo errado.
+
+```typescript
+// src/env/env.ts
+import { z } from 'zod'
+
+export const envSchema = z.object({
+  NODE_ENV: z.enum(['development', 'production', 'test']),
+  PORT: z.coerce.number().default(3001),
+  DATABASE_URL: z.string().url(),
+  REDIS_URL: z.string(),
+
+  // JWT — suporte a arquivos ou strings inline
+  JWT_PRIVATE_KEY: z.string().optional(),
+  JWT_PUBLIC_KEY: z.string().optional(),
+  JWT_PRIVATE_KEY_PATH: z.string().optional(),
+  JWT_PUBLIC_KEY_PATH: z.string().optional(),
+
+  // Sessão (HS256 para cookies de refresh)
+  SESSION_JWT_SECRET: z.string().min(32),
+
+  // CORS
+  CORS_ORIGINS: z.string().default('http://localhost:3000'),
+
+  // Rate limiting
+  RATE_LIMIT_AUTH_MAX: z.coerce.number().default(5),
+  RATE_LIMIT_AUTH_WINDOW_SECONDS: z.coerce.number().default(60),
+
+  // Storage
+  STORAGE_TYPE: z.enum(['local', 's3']).default('local'),
+})
+
+export type Env = z.infer<typeof envSchema>
+```
+
+Usado como `ConfigModule.forRoot({ validate: (config) => envSchema.parse(config) })` no `AppModule`.
+
+### 3.11 Multi-tenancy
 
 Estratégia: **Row-Level Tenancy com `tenantId` em todas as tabelas**.
 
@@ -307,7 +527,7 @@ Estratégia: **Row-Level Tenancy com `tenantId` em todas as tabelas**.
 - O Prisma middleware garante que todo acesso seja filtrado pelo `tenantId` — impossível vazar dados entre tenants.
 - Dados do Reseller ficam em um tenant especial com role `RESELLER`.
 
-### 3.9 Impersonation (Login como Cliente)
+### 3.12 Impersonation (Login como Cliente)
 
 Fluxo:
 1. Reseller chama `POST /auth/impersonate/:tenantId`.
@@ -317,7 +537,226 @@ Fluxo:
 5. **Todo** acesso com esse token é gravado em `AuditLog` com `impersonated: true` (imutável — sem UPDATE/DELETE).
 6. Encerrar via `POST /auth/impersonate/end` revoga a `UserSession`.
 
-### 3.10 Autenticação
+### 3.14 VO / Entity / Use Case — Separação de Responsabilidades
+
+Regra explícita para não misturar as camadas:
+
+| Onde | O que fica | O que **não** fica |
+|------|-----------|-------------------|
+| **Value Object** | Validação e encapsulamento do valor. Rejeita estados inválidos na construção. | Estado mutável, I/O, referência a outras entidades. |
+| **Entity** | Invariantes do aggregate. Métodos que mudam estado interno (`lockAccount`, `verifyEmail`). | Regras que envolvam outros aggregates, I/O, acesso a repositório. |
+| **Use Case** | Orquestração: chama VOs, entidades e repositórios em sequência. Retorna `Either`. | Lógica de validação de valor (vai no VO), decisões de negócio que envolvam apenas um aggregate (vai na Entity). |
+
+**Exemplo concreto — onde fica cada regra:**
+
+```typescript
+// ✅ CORRETO — regra de formato de e-mail fica no VO
+class Email {
+  static create(raw: string): Email {
+    if (!raw.includes('@')) throw new InvalidEmailError()      // ← regra aqui
+    if (raw.length > 254) throw new InvalidEmailError()        // ← regra aqui
+    return new Email(raw.toLowerCase())
+  }
+  // createTrusted() para dados vindos do banco — pula validação
+  static createTrusted(raw: string): Email {
+    return new Email(raw)
+  }
+}
+
+// ✅ CORRETO — invariante do aggregate fica na entity
+class UserIdentity {
+  incrementFailedAttempts(): void {
+    this.props.failedLoginAttempts += 1
+    if (this.props.failedLoginAttempts >= 5) {   // ← invariante do aggregate
+      this.lockAccount(15)
+    }
+  }
+}
+
+// ✅ CORRETO — use case só orquestra, não tem lógica de negócio própria
+class AuthenticateUserUseCase {
+  async execute(dto: AuthenticateUserDto): Promise<AuthenticateUserResult> {
+    // 1. Valida input → delega ao VO
+    const emailOrError = Email.create(dto.email)    // ← regra no VO
+    if (emailOrError.isLeft()) return left(new InvalidCredentialsError())
+
+    // 2. Busca dado → delega ao repositório
+    const user = await this.userViewRepo.findByEmail(dto.email)
+    if (!user) return left(new InvalidCredentialsError())
+
+    // 3. Executa lógica → delega à entity
+    if (user.identity.isLocked()) return left(new AccountLockedError())  // ← regra na entity
+
+    const isValid = await user.identity.password.compare(dto.password)  // ← regra no VO
+    if (!isValid) {
+      user.identity.incrementFailedAttempts()   // ← invariante na entity
+      await this.identityRepo.save(user.identity)
+      return left(new InvalidCredentialsError())
+    }
+
+    // 4. Retorna resultado
+    user.identity.resetFailedAttempts()
+    await this.identityRepo.save(user.identity)
+    return right({ accessToken: '...', refreshToken: '...' })
+  }
+}
+
+// ❌ ERRADO — regra de negócio no use case
+class CreateUserUseCase {
+  async execute(dto) {
+    if (!dto.email.includes('@')) return left(...)  // ← deveria estar no VO Email
+    if (dto.password.length < 8) return left(...)   // ← deveria estar no VO Password
+  }
+}
+```
+
+### 3.15 Domain Service vs Use Case — Quando Usar
+
+**Use Case** (`application/use-cases/`): operação que envolve um ou mais aggregates e repositórios para atender um único caso de uso da aplicação. Tem correspondência direta com um endpoint ou comando do sistema.
+
+**Domain Service** (`application/services/`): lógica de negócio que **não pertence a nenhum aggregate específico** e opera sobre múltiplos aggregates ou envolve regras complexas que transcendem uma entity.
+
+| Situação | Onde fica |
+|----------|-----------|
+| Verificar se e-mail já existe antes de criar usuário | Use Case (orquestra repo) |
+| Validar complexidade de senha | Value Object `Password` |
+| Calcular se tenant está dentro do limite do plano ao criar lead | **Domain Service** `PlanLimitService` |
+| Gerar e enviar senha temporária para novo usuário | Use Case (orquestra VO + email service) |
+| Consolidar regra de permissão que envolve role + plano + tenant | **Domain Service** `PermissionService` |
+
+```typescript
+// Domain Service — lógica que envolve dois aggregates (Tenant + Plan)
+@Injectable()
+export class PlanLimitService {
+  canCreateLead(tenant: Tenant, plan: Plan, currentLeadCount: number): boolean {
+    if (plan.maxLeads === -1) return true       // ilimitado
+    return currentLeadCount < plan.maxLeads
+  }
+
+  canCreateUser(tenant: Tenant, plan: Plan, currentUserCount: number): boolean {
+    return currentUserCount < plan.maxUsers
+  }
+}
+
+// Use Case que usa o Domain Service
+class CreateLeadUseCase {
+  constructor(
+    private planLimitService: PlanLimitService,
+    private tenantRepo: ITenantRepository,
+    private planRepo: IPlanRepository,
+    private leadRepo: ILeadRepository,
+  ) {}
+
+  async execute(dto) {
+    const tenant = await this.tenantRepo.findById(dto.tenantId)
+    const plan = await this.planRepo.findById(tenant.planId)
+    const count = await this.leadRepo.countByTenant(dto.tenantId)
+
+    if (!this.planLimitService.canCreateLead(tenant, plan, count)) {
+      return left(new PlanLimitExceededError('leads'))
+    }
+    // ...
+  }
+}
+```
+
+### 3.16 Mappers — Contrato e `createTrusted()`
+
+**Regra crítica**: dados vindos do banco **já foram validados na escrita** — usar `createTrusted()` nos VOs ao reconstruir entidades, nunca `create()`. `create()` lança exceção se o valor for inválido; `createTrusted()` confia nos dados e pula validação.
+
+```typescript
+// infra/database/prisma/mappers/prisma-user-identity.mapper.ts
+export class PrismaUserIdentityMapper {
+  // Banco → Domain: usa createTrusted() — dados já validados na escrita
+  static toDomain(raw: PrismaUserIdentity): UserIdentity {
+    return UserIdentity.reconstitute(
+      {
+        tenantId: raw.tenantId,
+        email: Email.createTrusted(raw.email),        // ← trusted: veio do banco
+        password: Password.createFromHash(raw.passwordHash), // ← trusted: já é hash
+        isEmailVerified: raw.isEmailVerified,
+        failedLoginAttempts: raw.failedLoginAttempts,
+        lockedUntil: raw.lockedUntil ?? undefined,
+        deletedAt: raw.deletedAt ?? undefined,
+        createdAt: raw.createdAt,
+        updatedAt: raw.updatedAt,
+      },
+      new UniqueEntityID(raw.id),
+    )
+  }
+
+  // Domain → Banco: extrai valores primitivos
+  static toPersistence(entity: UserIdentity): Prisma.UserIdentityCreateInput {
+    return {
+      id: entity.id.toString(),
+      tenantId: entity.tenantId,
+      email: entity.email.value,
+      passwordHash: entity.password.value,
+      isEmailVerified: entity.isEmailVerified,
+      failedLoginAttempts: entity.failedLoginAttempts,
+      lockedUntil: entity.lockedUntil ?? null,
+      deletedAt: entity.deletedAt ?? null,
+    }
+  }
+}
+```
+
+**Dois métodos estáticos na Entity:**
+- `Entity.create()` — para criação nova (dispara domain events, valida estado inicial)
+- `Entity.reconstitute()` — para reconstrução do banco (sem domain events, sem validação duplicada)
+
+### 3.17 Error Mappings — Domínio → HTTP (RFC 7807)
+
+O `GlobalExceptionFilter` em `infra/filters/` captura todos os erros e os mapeia para respostas padronizadas RFC 7807 (Problem Details).
+
+```typescript
+// infra/filters/error-mappings/domain-error.mapping.ts
+export const domainErrorMapping: Record<string, { status: number; title: string }> = {
+  InvalidCredentialsError:    { status: 401, title: 'Invalid credentials' },
+  AccountLockedError:         { status: 403, title: 'Account temporarily locked' },
+  UserAlreadyExistsError:     { status: 409, title: 'Email already registered' },
+  WeakPasswordError:          { status: 422, title: 'Password does not meet requirements' },
+  TenantNotFoundError:        { status: 404, title: 'Tenant not found' },
+  PlanLimitExceededError:     { status: 422, title: 'Plan limit exceeded' },
+  UnauthorizedError:          { status: 403, title: 'Insufficient permissions' },
+}
+
+// infra/filters/http-exception.filter.ts
+@Catch()
+export class GlobalExceptionFilter implements ExceptionFilter {
+  catch(exception: unknown, host: ArgumentsHost) {
+    const ctx = host.switchToHttp()
+    const response = ctx.getResponse<Response>()
+    const request = ctx.getRequest<Request>()
+
+    if (exception instanceof DomainError) {
+      const mapping = domainErrorMapping[exception.constructor.name]
+      return response.status(mapping?.status ?? 500).json({
+        type: `https://errors.wb-kommo.com/${exception.constructor.name}`,
+        title: mapping?.title ?? 'Internal Server Error',
+        status: mapping?.status ?? 500,
+        detail: exception.message,
+        traceId: request.headers['x-trace-id'],
+        timestamp: new Date().toISOString(),
+      })
+    }
+    // ... trata outros tipos de exceção
+  }
+}
+```
+
+**No controller — responsabilidade zero de mapeamento:**
+```typescript
+@Post()
+async create(@Body() dto: CreateUserDto, @CurrentUser() actor: JwtPayload) {
+  const result = await this.createUserUseCase.execute(dto, actor.tenantId)
+
+  if (result.isLeft()) throw result.value   // ← lança o DomainError, filter mapeia
+  return UserPresenter.toHttp(result.value) // ← controller só apresenta o sucesso
+}
+```
+
+### 3.13 Autenticação
 
 - Access Token (JWT, 15min) + Refresh Token (7 dias, httpOnly cookie).
 - Refresh Token: hash SHA256 armazenado na `UserSession` — token raw nunca persiste.
@@ -617,7 +1056,7 @@ Todo código de backend é escrito seguindo o ciclo **Red → Green → Refactor
 - Use cases são o ponto de entrada do TDD — o teste do use case guia o design das entidades e value objects.
 - Value Objects e Domain Entities são desenvolvidos TDD puro (unitários com in-memory repos).
 - Repositórios Prisma são desenvolvidos TDD com testes de integração (testcontainers).
-- Controllers/rotas são desenvolvidos TDD com testes E2E.
+- Controllers são desenvolvidos TDD com dois tipos de teste: unitário (mock do use case, verifica mapeamento de erros e HTTP status) e E2E (fluxo completo com banco real).
 
 **Exemplo de ciclo TDD — `CreateLeadUseCase`:**
 
@@ -651,7 +1090,7 @@ it('should create a lead and assign it to the first stage of the pipeline', asyn
 **Factories de teste** para criar agregados válidos sem repetição:
 
 ```typescript
-// test/factories/make-lead.ts
+// src/test/factories/make-lead.ts
 export function makeLead(override: Partial<LeadProps> = {}): Lead {
   return Lead.create({
     tenantId: 'tenant-1',
@@ -748,20 +1187,28 @@ Scripts no `package.json`:
 
 ```
          /\
-        /E2E\         ← ~10% — Supertest + @nestjs/testing, fluxos completos
+        /E2E\         ← ~10% — Supertest + @nestjs/testing, todas as rotas
        /------\
       /Integração\    ← ~20% — Repositórios Prisma com testcontainers
      /------------\
-    /    Unitários  \  ← ~70% — Domain + Use Cases com in-memory repos
-   /________________\
+    /  Unitários   \  ← ~70% — Use Cases (in-memory repos) + Controllers (mock use case)
+   /________________\        + Value Objects + Domain Services
 ```
+
+| Tipo | O que testa | Isolamento |
+|------|------------|-----------|
+| Unitário — Use Case | Regras de negócio, fluxos do domínio | In-memory repos, sem banco |
+| Unitário — Controller | Mapeamento de erros → HTTP status, extração de dados do request | Mock do use case |
+| Unitário — VO/Entity | Validações, invariantes | Sem deps externas |
+| Integração | Repositórios Prisma vs banco real | Testcontainers PostgreSQL |
+| E2E | Todas as rotas ponta a ponta | AppModule completo + banco real |
 
 ### 6.5 Testes Unitários — In-Memory Repositories
 
 Repositórios in-memory implementam a mesma interface dos repositórios Prisma. Use cases testados com 100% de isolamento, sem banco, sem I/O.
 
 ```typescript
-// test/repositories/in-memory-user-identity.repository.ts
+// src/test/repositories/in-memory-user-identity.repository.ts
 export class InMemoryUserIdentityRepository implements IUserIdentityRepository {
   public items: UserIdentity[] = []
 
@@ -808,7 +1255,86 @@ describe('CreateUserUseCase', () => {
 })
 ```
 
-### 6.6 Testes de Integração — Prisma + Testcontainers
+### 6.6 Testes Unitários de Controller
+
+Controllers têm lógica específica que precisa de teste isolado: mapeamento correto de erros de domínio → HTTP status, extração de dados do `@CurrentUser()` / `@Param()`, e chamada correta ao use case. O use case é **mockado** — o objetivo é testar o controller, não o use case.
+
+```typescript
+// infra/http/controllers/users.controller.spec.ts
+import { Test, TestingModule } from '@nestjs/testing'
+import { vi, describe, it, expect, beforeEach } from 'vitest'
+
+describe('UsersController', () => {
+  let controller: UsersController
+  let createUserUseCase: { execute: ReturnType<typeof vi.fn> }
+
+  beforeEach(async () => {
+    createUserUseCase = { execute: vi.fn() }
+
+    const module: TestingModule = await Test.createTestingModule({
+      controllers: [UsersController],
+      providers: [
+        { provide: CreateUserUseCase, useValue: createUserUseCase },
+      ],
+    }).compile()
+
+    controller = module.get(UsersController)
+  })
+
+  it('should return 201 with user data on success', async () => {
+    createUserUseCase.execute.mockResolvedValue(
+      right({ id: 'user-1', name: 'John', email: 'john@test.com' })
+    )
+
+    const result = await controller.create(
+      { name: 'John', email: 'john@test.com', password: 'P@ss1234' },
+      { tenantId: 'tenant-1', role: 'ACCOUNT_ADMIN' },
+    )
+
+    expect(result).toEqual({ id: 'user-1', name: 'John', email: 'john@test.com' })
+  })
+
+  it('should throw DomainError when use case returns Left', async () => {
+    createUserUseCase.execute.mockResolvedValue(
+      left(new UserAlreadyExistsError())
+    )
+
+    await expect(
+      controller.create(
+        { name: 'John', email: 'existing@test.com', password: 'P@ss1234' },
+        { tenantId: 'tenant-1', role: 'ACCOUNT_ADMIN' },
+      )
+    ).rejects.toBeInstanceOf(UserAlreadyExistsError)
+    // GlobalExceptionFilter mapeia UserAlreadyExistsError → 409
+  })
+
+  it('should pass tenantId from JWT to use case', async () => {
+    createUserUseCase.execute.mockResolvedValue(right({ id: 'user-1' }))
+
+    await controller.create(
+      { name: 'John', email: 'john@test.com', password: 'P@ss1234' },
+      { tenantId: 'tenant-abc', role: 'ACCOUNT_ADMIN' },
+    )
+
+    expect(createUserUseCase.execute).toHaveBeenCalledWith(
+      expect.objectContaining({ tenantId: 'tenant-abc' })
+    )
+  })
+})
+```
+
+**O que testar no controller unitário:**
+- Retorno correto no caminho feliz
+- `throw result.value` quando `isLeft()` (verifica que o error chega ao filter)
+- Dados extraídos corretamente do request (`@Param`, `@Body`, `@CurrentUser`)
+- Que o use case foi chamado com os parâmetros corretos
+
+**O que NÃO testar no controller unitário:**
+- Regra de negócio (está no use case)
+- HTTP status code final (será testado no E2E com o filter ativo)
+- Autenticação/guards (serão testados no E2E)
+
+### 6.7 Testes de Integração — Prisma + Testcontainers
 
 ```typescript
 // __tests__/integration/prisma-user-identity.repository.spec.ts
@@ -844,15 +1370,46 @@ describe('PrismaUserIdentityRepository', () => {
 })
 ```
 
-### 6.7 Testes E2E — Supertest + @nestjs/testing
+### 6.8 Testes E2E — Supertest + @nestjs/testing
+
+#### setup-e2e.ts — Schema PostgreSQL isolado por suite
+
+Cada suite E2E recebe um schema PostgreSQL exclusivo (`test_{uuid}`). Isso permite rodar todas as suites em paralelo sem interferência.
 
 ```typescript
-// test/auth.e2e-spec.ts
+// test/setup-e2e.ts
+import { execSync } from 'child_process'
+import { randomUUID } from 'crypto'
+import { PrismaClient } from '@prisma/client'
+
+const schemaId = randomUUID()
+const schemaUrl = `${process.env.DATABASE_URL}?schema=${schemaId}`
+
+beforeAll(async () => {
+  // Cria schema isolado e roda migrations
+  execSync('npx prisma migrate deploy', {
+    env: { ...process.env, DATABASE_URL: schemaUrl },
+  })
+  process.env.DATABASE_URL = schemaUrl
+})
+
+afterAll(async () => {
+  // Dropa o schema ao final para não acumular lixo
+  const prisma = new PrismaClient({ datasources: { db: { url: schemaUrl } } })
+  await prisma.$executeRawUnsafe(`DROP SCHEMA IF EXISTS "${schemaId}" CASCADE`)
+  await prisma.$disconnect()
+})
+```
+
+#### Exemplo de suite E2E
+
+```typescript
+// test/e2e/auth/login.e2e-spec.ts
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { Test } from '@nestjs/testing'
 import * as request from 'supertest'
 
-describe('Auth (e2e)', () => {
+describe('Auth — POST /auth/login (e2e)', () => {
   let app: INestApplication
 
   beforeAll(async () => {
@@ -861,26 +1418,51 @@ describe('Auth (e2e)', () => {
     }).compile()
 
     app = module.createNestApplication()
+    app.useGlobalFilters(new GlobalExceptionFilter())  // ← ativa o filter para testar HTTP status
+    app.useGlobalPipes(new ValidationPipe({ whitelist: true }))
     await app.init()
   })
 
   afterAll(() => app.close())
 
-  it('POST /auth/login → 200 with valid credentials', async () => {
+  it('POST /auth/login → 200 com credenciais válidas', async () => {
     await request(app.getHttpServer())
       .post('/auth/login')
       .send({ email: 'reseller@wb.com', password: 'P@ss1234' })
       .expect(200)
       .expect(res => {
         expect(res.body).toHaveProperty('accessToken')
+        expect(res.body).not.toHaveProperty('password')
       })
   })
 
-  it('POST /auth/impersonate/:tenantId → 403 for non-reseller', async () => {
+  it('POST /auth/login → 401 com senha errada', async () => {
+    await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({ email: 'reseller@wb.com', password: 'wrong' })
+      .expect(401)
+      .expect(res => {
+        expect(res.body.type).toContain('InvalidCredentialsError')
+        expect(res.body).toHaveProperty('traceId')
+      })
+  })
+
+  it('POST /auth/impersonate/:tenantId → 403 para não-reseller', async () => {
     // ...
   })
 })
 ```
+
+**Cobertura mínima de E2E por domínio:**
+
+| Domínio | Rotas obrigatórias |
+|---------|-------------------|
+| auth | login, logout, refresh, impersonate, impersonate/end |
+| users | create (reseller), create (admin), list, get, update, delete |
+| tenants | create, list, get, update |
+| leads | create, list, get, update, move-stage, delete |
+| pipelines | create, list, get, update, stages CRUD |
+| activities | create, list, complete |
 
 ---
 
@@ -1125,7 +1707,39 @@ Reseller → POST /tenants
   → Grava AuditLog
 ```
 
-### 8.2 Gestão de Leads
+### 8.2 Criação de Usuários (por RESELLER ou ACCOUNT_ADMIN)
+
+```
+# RESELLER criando usuário em qualquer tenant
+RESELLER → POST /tenants/:tenantId/users
+  → RolesGuard: exige RESELLER
+  → Verifica limite do plano (maxUsers)
+  → Cria UserIdentity + UserProfile + UserAuthorization (role: MEMBER ou ACCOUNT_ADMIN)
+  → Envia email com senha temporária
+  → Grava AuditLog
+
+# ACCOUNT_ADMIN criando usuário no próprio tenant
+ACCOUNT_ADMIN → POST /users
+  → RolesGuard: exige RESELLER | ACCOUNT_ADMIN
+  → TenantGuard: força tenantId do JWT (não pode criar em outro tenant)
+  → Verifica limite do plano (maxUsers)
+  → Cria UserIdentity + UserProfile + UserAuthorization (role: MEMBER)
+  → Envia email com senha temporária
+  → Grava AuditLog
+```
+
+**Rotas de gestão de usuários:**
+
+| Método | Rota | Guard | Descrição |
+|--------|------|-------|-----------|
+| `POST` | `/tenants/:tenantId/users` | `RESELLER` | Reseller cria usuário em qualquer tenant |
+| `POST` | `/users` | `RESELLER \| ACCOUNT_ADMIN` | Cria usuário no próprio tenant |
+| `GET` | `/users` | `RESELLER \| ACCOUNT_ADMIN` | Lista usuários do tenant |
+| `GET` | `/users/:id` | `RESELLER \| ACCOUNT_ADMIN` | Detalhes de um usuário |
+| `PATCH` | `/users/:id` | `RESELLER \| ACCOUNT_ADMIN` | Atualiza perfil/role |
+| `DELETE` | `/users/:id` | `RESELLER \| ACCOUNT_ADMIN` | Desativa usuário (soft delete) |
+
+### 8.3 Gestão de Leads
 ```
 Lead criado → Stage inicial do Pipeline
   → Movimentação via drag & drop (Kanban) → PATCH /leads/:id/stage
@@ -1134,7 +1748,7 @@ Lead criado → Stage inicial do Pipeline
   → Lead pode ser ganho (WON) ou perdido (LOST)
 ```
 
-### 8.3 Impersonation
+### 8.4 Impersonation
 ```
 Reseller → POST /auth/impersonate/:tenantId
   → Valida role RESELLER
@@ -1192,7 +1806,7 @@ Reseller → POST /auth/impersonate/:tenantId
 - [ ] In-memory repositories para testes
 - [ ] Use cases: CreateUser, AuthenticateUser, RefreshToken
 - [ ] Impersonation: ImpersonateUseCase + UserSession
-- [ ] Setup Jest (unit + integration + e2e)
+- [ ] Setup Vitest (unit + integration + e2e)
 - [ ] Setup Next.js + Tailwind + shadcn
 - [ ] Telas de Login e Dashboard base
 
@@ -1224,4 +1838,4 @@ Reseller → POST /auth/impersonate/:tenantId
 
 ---
 
-*Versão 1.1 — atualizado em 2026-04-06 com padrões do projeto revalida-italia-back.*
+*Versão 1.6 — atualizado em 2026-04-07: erros tipados em `use-cases/errors/`, separação VO/Entity/UseCase, Domain Service vs Use Case, contrato de mappers com `createTrusted()`, error-mappings RFC 7807, testes unitários de controller, setup-e2e.ts com schema PostgreSQL isolado, pirâmide de testes revisada.*
