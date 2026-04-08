@@ -9,7 +9,7 @@ export class PrismaUserAuthorizationMapper {
       {
         tenantId: raw.tenantId,
         identityId: raw.identityId,
-        role: UserRole.create(raw.role as 'RESELLER' | 'ACCOUNT_ADMIN' | 'MEMBER'),
+        role: UserRole.create(raw.role as 'PLATFORM_OWNER' | 'RESELLER' | 'ACCOUNT_ADMIN' | 'MEMBER'),
         customPermissions: raw.customPermissions as string[],
         restrictions: raw.restrictions as string[],
         effectiveFrom: raw.effectiveFrom,

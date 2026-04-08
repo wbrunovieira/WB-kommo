@@ -19,7 +19,7 @@ import { SessionNotFoundError } from '@/domain/auth/application/use-cases/errors
 import { GlobalExceptionFilter } from '@/infra/filters/http-exception.filter'
 import { APP_FILTER, APP_GUARD, Reflector } from '@nestjs/core'
 
-const MOCK_USER = { sub: 'uid-1', tenantId: 'tenant-1', role: 'RESELLER' }
+const MOCK_USER = { sub: 'uid-1', tenantId: 'tenant-1', role: 'PLATFORM_OWNER' }
 
 @Injectable()
 class MockAuthGuard implements CanActivate {

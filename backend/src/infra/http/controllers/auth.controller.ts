@@ -180,13 +180,15 @@ export class AuthController {
 
   // ─── POST /auth/impersonate/:tenantId ───────────────────────────────────
 
-  @Roles('RESELLER')
+  @Roles('RESELLER', 'PLATFORM_OWNER')
   @Post('impersonate/:tenantId')
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth('access-token')
   @ApiOperation({
     summary: 'Impersonate tenant',
-    description: 'RESELLER only. Creates a short-lived impersonation session (30 min) in the target tenant.',
+    description:
+      'RESELLER or PLATFORM_OWNER. Creates a short-lived impersonation session (30 min) in the target tenant. ' +
+      'RESELLER can only impersonate their own client tenants. PLATFORM_OWNER can impersonate any tenant.',
   })
   @ApiParam({ name: 'tenantId', description: 'ID of the tenant to impersonate' })
   @ApiResponse({ status: 200, description: 'Impersonation session created.', type: AuthTokensResponse })

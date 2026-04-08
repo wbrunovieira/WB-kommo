@@ -21,8 +21,8 @@ export class RegisterUserDto {
   @MinLength(8)
   password!: string
 
-  @ApiProperty({ enum: ['RESELLER', 'ACCOUNT_ADMIN', 'MEMBER'], example: 'ACCOUNT_ADMIN' })
-  @IsEnum(['RESELLER', 'ACCOUNT_ADMIN', 'MEMBER'])
+  @ApiProperty({ enum: ['PLATFORM_OWNER', 'RESELLER', 'ACCOUNT_ADMIN', 'MEMBER'], example: 'ACCOUNT_ADMIN' })
+  @IsEnum(['PLATFORM_OWNER', 'RESELLER', 'ACCOUNT_ADMIN', 'MEMBER'])
   role!: RoleType
 
   @ApiPropertyOptional({ example: 'America/Sao_Paulo' })

@@ -1,6 +1,6 @@
-export type RoleType = 'RESELLER' | 'ACCOUNT_ADMIN' | 'MEMBER'
+export type RoleType = 'PLATFORM_OWNER' | 'RESELLER' | 'ACCOUNT_ADMIN' | 'MEMBER'
 
-const VALID_ROLES: RoleType[] = ['RESELLER', 'ACCOUNT_ADMIN', 'MEMBER']
+const VALID_ROLES: RoleType[] = ['PLATFORM_OWNER', 'RESELLER', 'ACCOUNT_ADMIN', 'MEMBER']
 
 export class UserRole {
   private readonly _value: RoleType
@@ -20,6 +20,10 @@ export class UserRole {
     return this._value
   }
 
+  isPlatformOwner(): boolean {
+    return this._value === 'PLATFORM_OWNER'
+  }
+
   isReseller(): boolean {
     return this._value === 'RESELLER'
   }
@@ -33,15 +37,16 @@ export class UserRole {
   }
 
   isAdmin(): boolean {
-    return this._value === 'RESELLER' || this._value === 'ACCOUNT_ADMIN'
+    return this._value === 'PLATFORM_OWNER' || this._value === 'RESELLER' || this._value === 'ACCOUNT_ADMIN'
   }
 
   canImpersonate(): boolean {
-    return this._value === 'RESELLER'
+    return this._value === 'PLATFORM_OWNER' || this._value === 'RESELLER'
   }
 
-  canManageAllTenants(): boolean {
-    return this._value === 'RESELLER'
+  /** Only PLATFORM_OWNER can see every tenant globally (all resellers + all clients) */
+  canSeeAllTenants(): boolean {
+    return this._value === 'PLATFORM_OWNER'
   }
 
   canCreateUsers(): boolean {

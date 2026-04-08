@@ -2,18 +2,53 @@ import { describe, it, expect } from 'vitest'
 import { UserRole, RoleType } from './user-role.vo'
 
 describe('UserRole VO', () => {
+  describe('PLATFORM_OWNER', () => {
+    const role = UserRole.create('PLATFORM_OWNER')
+
+    it('should identify as platform owner', () => {
+      expect(role.isPlatformOwner()).toBe(true)
+      expect(role.isReseller()).toBe(false)
+      expect(role.isAccountAdmin()).toBe(false)
+      expect(role.isMember()).toBe(false)
+    })
+
+    it('should be able to impersonate and see all tenants globally', () => {
+      expect(role.canImpersonate()).toBe(true)
+      expect(role.canSeeAllTenants()).toBe(true)
+    })
+
+    it('should have all elevated permissions', () => {
+      expect(role.canCreateUsers()).toBe(true)
+      expect(role.canDeleteUsers()).toBe(true)
+      expect(role.canExportData()).toBe(true)
+      expect(role.canViewBilling()).toBe(true)
+      expect(role.canAccessAdminPanel()).toBe(true)
+      expect(role.canManagePipelines()).toBe(true)
+      expect(role.canCreateLeads()).toBe(true)
+      expect(role.canDeleteLeads()).toBe(true)
+    })
+
+    it('isAdmin() should be true', () => {
+      expect(role.isAdmin()).toBe(true)
+    })
+  })
+
   describe('RESELLER', () => {
     const role = UserRole.create('RESELLER')
 
     it('should identify as reseller', () => {
       expect(role.isReseller()).toBe(true)
+      expect(role.isPlatformOwner()).toBe(false)
       expect(role.isAccountAdmin()).toBe(false)
       expect(role.isMember()).toBe(false)
     })
 
-    it('should have all elevated permissions', () => {
+    it('should be able to impersonate but NOT see all tenants globally', () => {
       expect(role.canImpersonate()).toBe(true)
-      expect(role.canManageAllTenants()).toBe(true)
+      expect(role.canSeeAllTenants()).toBe(false)
+    })
+
+    it('should have all elevated permissions', () => {
       expect(role.canCreateUsers()).toBe(true)
       expect(role.canDeleteUsers()).toBe(true)
       expect(role.canExportData()).toBe(true)
@@ -34,13 +69,14 @@ describe('UserRole VO', () => {
 
     it('should identify as account admin', () => {
       expect(role.isAccountAdmin()).toBe(true)
+      expect(role.isPlatformOwner()).toBe(false)
       expect(role.isReseller()).toBe(false)
       expect(role.isMember()).toBe(false)
     })
 
-    it('should NOT be able to impersonate or manage all tenants', () => {
+    it('should NOT be able to impersonate or see all tenants', () => {
       expect(role.canImpersonate()).toBe(false)
-      expect(role.canManageAllTenants()).toBe(false)
+      expect(role.canSeeAllTenants()).toBe(false)
     })
 
     it('should have admin-level permissions within own tenant', () => {
@@ -61,6 +97,7 @@ describe('UserRole VO', () => {
 
     it('should identify as member', () => {
       expect(role.isMember()).toBe(true)
+      expect(role.isPlatformOwner()).toBe(false)
       expect(role.isReseller()).toBe(false)
       expect(role.isAccountAdmin()).toBe(false)
     })
@@ -72,7 +109,7 @@ describe('UserRole VO', () => {
       expect(role.canDeleteLeads()).toBe(false)
       expect(role.canExportData()).toBe(false)
       expect(role.canImpersonate()).toBe(false)
-      expect(role.canManageAllTenants()).toBe(false)
+      expect(role.canSeeAllTenants()).toBe(false)
     })
 
     it('isAdmin() should be false', () => {

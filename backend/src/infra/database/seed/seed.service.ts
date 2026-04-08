@@ -43,7 +43,7 @@ export class SeedService implements OnModuleInit {
       },
     })
 
-    // ── Tenant ───────────────────────────────────────────────────────────────
+    // ── Tenant (platform-level: resellerTenantId = null) ─────────────────────
     const tenant = await this.prisma.tenant.upsert({
       where: { slug: 'wb-digital-solutions' },
       update: {},
@@ -53,6 +53,7 @@ export class SeedService implements OnModuleInit {
         slug: 'wb-digital-solutions',
         planId: plan.id,
         isActive: true,
+        resellerTenantId: null,
       },
     })
 
@@ -88,18 +89,18 @@ export class SeedService implements OnModuleInit {
       },
     })
 
-    // ── UserAuthorization ────────────────────────────────────────────────────
+    // ── UserAuthorization (PLATFORM_OWNER — has global access) ───────────────
     await this.prisma.userAuthorization.create({
       data: {
         tenantId: tenant.id,
         identityId: identity.id,
-        role: RoleType.RESELLER,
+        role: RoleType.PLATFORM_OWNER,
         customPermissions: [],
         restrictions: [],
         effectiveFrom: new Date(),
       },
     })
 
-    this.logger.log(`Seed: reseller created — ${name} <${email}>`)
+    this.logger.log(`Seed: platform owner created — ${name} <${email}>`)
   }
 }

@@ -28,7 +28,7 @@ async function main() {
     },
   })
 
-  // ── 2. Tenant (reseller workspace) ──────────────────────────────────────────
+  // ── 2. Tenant (platform-level: resellerTenantId = null) ────────────────────
   const tenant = await prisma.tenant.upsert({
     where: { slug: 'wb-digital-solutions' },
     update: {},
@@ -38,6 +38,7 @@ async function main() {
       slug: 'wb-digital-solutions',
       planId: plan.id,
       isActive: true,
+      resellerTenantId: null,
     },
   })
 
@@ -73,19 +74,19 @@ async function main() {
     },
   })
 
-  // ── 5. UserAuthorization ────────────────────────────────────────────────────
+  // ── 5. UserAuthorization (PLATFORM_OWNER) ──────────────────────────────────
   await prisma.userAuthorization.create({
     data: {
       tenantId: tenant.id,
       identityId: identity.id,
-      role: RoleType.RESELLER,
+      role: RoleType.PLATFORM_OWNER,
       customPermissions: [],
       restrictions: [],
       effectiveFrom: new Date(),
     },
   })
 
-  console.log(`✓  Reseller created: ${name} <${email}>`)
+  console.log(`✓  Platform owner created: ${name} <${email}>`)
 }
 
 main()
