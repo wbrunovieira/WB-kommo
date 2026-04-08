@@ -1,5 +1,4 @@
-import { redirect } from 'next/navigation'
-
+// Handled by next-intl middleware — redirects to /[locale]
 export default function Home() {
-  redirect('/login')
+  return null
 }

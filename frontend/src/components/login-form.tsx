@@ -1,21 +1,13 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useTranslations } from 'next-intl'
+import { useRouter } from '@/i18n/navigation'
 import { login, ApiError } from '@/lib/api'
 import { saveSession } from '@/lib/auth'
 
-const ERROR_MESSAGES: Record<number, string> = {
-  401: 'E-mail ou senha incorretos.',
-  403: 'Conta bloqueada temporariamente. Tente novamente em alguns minutos.',
-  404: 'Workspace não encontrado. Verifique o nome do workspace.',
-  422: 'Dados inválidos. Verifique os campos e tente novamente.',
-  423: 'Conta bloqueada temporariamente após várias tentativas. Aguarde alguns minutos.',
-  429: 'Muitas tentativas. Aguarde alguns minutos.',
-  500: 'Erro interno. Tente novamente em breve.',
-}
-
 export function LoginForm() {
+  const t = useTranslations('login')
   const router = useRouter()
 
   const [workspace, setWorkspace] = useState('')
@@ -36,10 +28,12 @@ export function LoginForm() {
       router.push('/dashboard')
     } catch (err) {
       const apiErr = err as ApiError
+      const key = String(apiErr?.status) as keyof typeof errorKeys
+      const errorKeys = { '401': true, '403': true, '404': true, '422': true, '423': true, '429': true, '500': true }
       setError(
-        ERROR_MESSAGES[apiErr?.status] ??
-          apiErr.detail ??
-          'Erro inesperado. Tente novamente.',
+        key in errorKeys
+          ? t(`errors.${key}` as Parameters<typeof t>[0])
+          : (apiErr?.detail ?? t('errors.unknown')),
       )
     } finally {
       setLoading(false)
@@ -50,12 +44,12 @@ export function LoginForm() {
     <form onSubmit={handleSubmit} noValidate style={{ width: '100%' }}>
       {/* Workspace */}
       <div style={{ marginBottom: '20px' }}>
-        <label style={labelStyle}>Workspace</label>
+        <label style={labelStyle}>{t('workspace')}</label>
         <input
           type="text"
           value={workspace}
           onChange={(e) => setWorkspace(e.target.value)}
-          placeholder="ex: wb-digital-solutions"
+          placeholder={t('workspacePlaceholder')}
           required
           autoComplete="organization"
           style={inputStyle}
@@ -66,12 +60,12 @@ export function LoginForm() {
 
       {/* Email */}
       <div style={{ marginBottom: '20px' }}>
-        <label style={labelStyle}>E-mail</label>
+        <label style={labelStyle}>{t('email')}</label>
         <input
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          placeholder="seu@email.com"
+          placeholder={t('emailPlaceholder')}
           required
           autoComplete="email"
           style={inputStyle}
@@ -82,13 +76,13 @@ export function LoginForm() {
 
       {/* Password */}
       <div style={{ marginBottom: '28px' }}>
-        <label style={labelStyle}>Senha</label>
+        <label style={labelStyle}>{t('password')}</label>
         <div style={{ position: 'relative' }}>
           <input
             type={showPassword ? 'text' : 'password'}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
+            placeholder={t('passwordPlaceholder')}
             required
             autoComplete="current-password"
             style={{ ...inputStyle, paddingRight: '48px' }}
@@ -98,7 +92,7 @@ export function LoginForm() {
           <button
             type="button"
             onClick={() => setShowPassword((v) => !v)}
-            aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+            aria-label={showPassword ? t('hidePassword') : t('showPassword')}
             style={eyeButtonStyle}
           >
             {showPassword ? <EyeOffIcon /> : <EyeIcon />}
@@ -137,10 +131,10 @@ export function LoginForm() {
       >
         {loading ? (
           <span style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
-            <Spinner /> Entrando...
+            <Spinner /> {t('submitting')}
           </span>
         ) : (
-          'Entrar'
+          t('submit')
         )}
       </button>
     </form>
