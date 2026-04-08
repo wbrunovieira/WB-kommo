@@ -62,6 +62,7 @@ export function LoginForm() {
       saveWorkspace(workspace)
       saveSession(tokens)
       router.push('/dashboard')
+      // Keep loading=true during navigation — no flash of "Entrar" before redirect
     } catch (err) {
       const apiErr = err as ApiError
       const key = String(apiErr?.status) as keyof typeof errorKeys
@@ -71,7 +72,6 @@ export function LoginForm() {
           ? t(`errors.${key}` as Parameters<typeof t>[0])
           : (apiErr?.detail ?? t('errors.unknown')),
       )
-    } finally {
       setLoading(false)
     }
   }
