@@ -23,7 +23,7 @@ describe('RegisterUserUseCase', () => {
       tenantId: 'tenant-1',
       name: 'John Doe',
       email: 'john@example.com',
-      password: 'P@ssw0rd!',
+      password: 'Fixture#1a',
       role: 'MEMBER',
     })
 
@@ -41,7 +41,7 @@ describe('RegisterUserUseCase', () => {
       tenantId: 'tenant-1',
       name: 'John',
       email: 'john@example.com',
-      password: 'P@ssw0rd!',
+      password: 'Fixture#1a',
       role: 'MEMBER',
     })
 
@@ -49,7 +49,7 @@ describe('RegisterUserUseCase', () => {
       tenantId: 'tenant-1',
       name: 'John Duplicate',
       email: 'john@example.com',
-      password: 'P@ssw0rd!',
+      password: 'Fixture#1a',
       role: 'MEMBER',
     })
 
@@ -63,7 +63,7 @@ describe('RegisterUserUseCase', () => {
       tenantId: 'tenant-1',
       name: 'John',
       email: 'john@example.com',
-      password: 'P@ssw0rd!',
+      password: 'Fixture#1a',
       role: 'MEMBER',
     })
 
@@ -71,7 +71,7 @@ describe('RegisterUserUseCase', () => {
       tenantId: 'tenant-2',
       name: 'John Other Tenant',
       email: 'john@example.com',
-      password: 'P@ssw0rd!',
+      password: 'Fixture#1a',
       role: 'ACCOUNT_ADMIN',
     })
 
@@ -97,7 +97,7 @@ describe('RegisterUserUseCase', () => {
       tenantId: 'tenant-1',
       name: 'John',
       email: 'not-an-email',
-      password: 'P@ssw0rd!',
+      password: 'Fixture#1a',
       role: 'MEMBER',
     })
 
@@ -110,7 +110,7 @@ describe('RegisterUserUseCase', () => {
       tenantId: 'tenant-1',
       name: 'John',
       email: 'john@example.com',
-      password: 'P@ssw0rd!',
+      password: 'Fixture#1a',
       role: 'ACCOUNT_ADMIN',
     })
 

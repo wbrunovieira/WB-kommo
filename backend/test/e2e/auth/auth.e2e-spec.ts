@@ -59,7 +59,7 @@ describe('Auth routes (E2E)', () => {
         tenantId: TENANT_ID,
         name: 'Alice',
         email: 'alice@e2e.com',
-        password: 'Secret@123',
+        password: 'Fixture#1a',
         role: 'ACCOUNT_ADMIN',
       })
 
@@ -74,7 +74,7 @@ describe('Auth routes (E2E)', () => {
         tenantId: TENANT_ID,
         name: 'Dup',
         email: 'dup@e2e.com',
-        password: 'Secret@123',
+        password: 'Fixture#1a',
         role: 'MEMBER',
       }
       await request(app.getHttpServer()).post('/auth/register').send(body)
@@ -98,7 +98,7 @@ describe('Auth routes (E2E)', () => {
 
   describe('POST /auth/login', () => {
     const USER_EMAIL = 'logintest@e2e.com'
-    const USER_PASSWORD = 'Secret@123'
+    const USER_PASSWORD = 'Fixture#1a'
 
     beforeAll(async () => {
       await request(app.getHttpServer()).post('/auth/register').send({
@@ -132,7 +132,7 @@ describe('Auth routes (E2E)', () => {
       const res = await request(app.getHttpServer()).post('/auth/login').send({
         workspace: TENANT_ID,
         email: USER_EMAIL,
-        password: 'WrongPass!9',
+        password: 'Fixture#Bad1',
       })
       expect(res.status).toBe(401)
       expect(res.body.title).toBe('Invalid credentials')
@@ -142,7 +142,7 @@ describe('Auth routes (E2E)', () => {
       const res = await request(app.getHttpServer()).post('/auth/login').send({
         workspace: TENANT_ID,
         email: 'ghost@e2e.com',
-        password: 'Secret@123',
+        password: 'Fixture#1a',
       })
       expect(res.status).toBe(401)
     })
@@ -153,7 +153,7 @@ describe('Auth routes (E2E)', () => {
         tenantId: TENANT_ID,
         name: 'Lock Me',
         email: lockedEmail,
-        password: 'Secret@123',
+        password: 'Fixture#1a',
         role: 'MEMBER',
       })
 
@@ -161,14 +161,14 @@ describe('Auth routes (E2E)', () => {
         await request(app.getHttpServer()).post('/auth/login').send({
           workspace: TENANT_ID,
           email: lockedEmail,
-          password: 'WrongPass!9',
+          password: 'Fixture#Bad1',
         })
       }
 
       const res = await request(app.getHttpServer()).post('/auth/login').send({
         workspace: TENANT_ID,
         email: lockedEmail,
-        password: 'Secret@123',
+        password: 'Fixture#1a',
       })
       expect(res.status).toBe(423)
     })
@@ -182,13 +182,13 @@ describe('Auth routes (E2E)', () => {
         tenantId: TENANT_ID,
         name: 'Refresh User',
         email: 'refresh@e2e.com',
-        password: 'Secret@123',
+        password: 'Fixture#1a',
         role: 'MEMBER',
       })
       const loginRes = await request(app.getHttpServer()).post('/auth/login').send({
         workspace: TENANT_ID,
         email: 'refresh@e2e.com',
-        password: 'Secret@123',
+        password: 'Fixture#1a',
       })
       const oldRefreshToken = extractRefreshTokenFromCookie(
         loginRes.headers['set-cookie'] as unknown as string[],
@@ -226,13 +226,13 @@ describe('Auth routes (E2E)', () => {
         tenantId: TENANT_ID,
         name: 'Replay User',
         email: 'replay@e2e.com',
-        password: 'Secret@123',
+        password: 'Fixture#1a',
         role: 'MEMBER',
       })
       const loginRes = await request(app.getHttpServer()).post('/auth/login').send({
         workspace: TENANT_ID,
         email: 'replay@e2e.com',
-        password: 'Secret@123',
+        password: 'Fixture#1a',
       })
       const refreshToken = extractRefreshTokenFromCookie(
         loginRes.headers['set-cookie'] as unknown as string[],
@@ -260,13 +260,13 @@ describe('Auth routes (E2E)', () => {
         tenantId: TENANT_ID,
         name: 'Logout User',
         email: 'logout@e2e.com',
-        password: 'Secret@123',
+        password: 'Fixture#1a',
         role: 'MEMBER',
       })
       const loginRes = await request(app.getHttpServer()).post('/auth/login').send({
         workspace: TENANT_ID,
         email: 'logout@e2e.com',
-        password: 'Secret@123',
+        password: 'Fixture#1a',
       })
       const accessToken = loginRes.body.accessToken
       const refreshToken = extractRefreshTokenFromCookie(
@@ -319,13 +319,13 @@ describe('Auth routes (E2E)', () => {
         tenantId: TENANT_ID,
         name: 'Reseller',
         email: 'reseller@e2e.com',
-        password: 'Secret@123',
+        password: 'Fixture#1a',
         role: 'RESELLER',
       })
       const resellerLogin = await request(app.getHttpServer()).post('/auth/login').send({
         workspace: TENANT_ID,
         email: 'reseller@e2e.com',
-        password: 'Secret@123',
+        password: 'Fixture#1a',
       })
       resellerToken = resellerLogin.body.accessToken
 
@@ -334,13 +334,13 @@ describe('Auth routes (E2E)', () => {
         tenantId: TENANT_ID,
         name: 'Member',
         email: 'member@e2e.com',
-        password: 'Secret@123',
+        password: 'Fixture#1a',
         role: 'MEMBER',
       })
       const memberLogin = await request(app.getHttpServer()).post('/auth/login').send({
         workspace: TENANT_ID,
         email: 'member@e2e.com',
-        password: 'Secret@123',
+        password: 'Fixture#1a',
       })
       memberToken = memberLogin.body.accessToken
     })

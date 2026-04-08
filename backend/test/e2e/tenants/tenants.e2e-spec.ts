@@ -33,7 +33,7 @@ async function registerAndLogin(
     tenantId,
     name: 'Test User',
     email,
-    password: 'Secret@123',
+    password: 'Fixture#1a',
     role,
   })
   if (regRes.status !== 201) {
@@ -42,7 +42,7 @@ async function registerAndLogin(
   const loginRes = await request(app.getHttpServer()).post('/auth/login').send({
     workspace: tenantId,
     email,
-    password: 'Secret@123',
+    password: 'Fixture#1a',
   })
   if (loginRes.status !== 200) {
     throw new Error(`login failed [${loginRes.status}]: ${JSON.stringify(loginRes.body)}`)

@@ -1,0 +1,8 @@
+version: 2
+
+# Exclude test fixture files — passwords here are synthetic test data, not real credentials
+ignore_paths:
+  - backend/src/**/*.spec.ts
+  - backend/test/**/*.ts
+  - backend/.env.example
+  - frontend/.env.example

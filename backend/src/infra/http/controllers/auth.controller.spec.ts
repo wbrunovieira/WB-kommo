@@ -78,7 +78,7 @@ describe('AuthController (unit)', () => {
       tenantId: 'tenant-1',
       name: 'Alice',
       email: 'alice@example.com',
-      password: 'Secret@123',
+      password: 'Fixture#1a',
       role: 'ACCOUNT_ADMIN',
     }
 
@@ -106,7 +106,7 @@ describe('AuthController (unit)', () => {
   // ─── POST /auth/login ───────────────────────────────────────────────────────
 
   describe('POST /auth/login', () => {
-    const validBody = { workspace: 'acme-corp', email: 'alice@example.com', password: 'Secret@123' }
+    const validBody = { workspace: 'acme-corp', email: 'alice@example.com', password: 'Fixture#1a' }
 
     it('sets httpOnly cookie with refresh token and returns accessToken in body', async () => {
       mockTenantRepo.findBySlug.mockResolvedValue(right({ id: 'tenant-1', isActive: true }))

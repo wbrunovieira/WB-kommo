@@ -19,7 +19,7 @@ async function setupUser(deps: {
   authRepo: InMemoryUserAuthorizationRepository
 }, overrides: { email?: string; locked?: boolean } = {}) {
   const id = new UniqueEntityID()
-  const password = await Password.create('P@ssw0rd!')
+  const password = await Password.create('Fixture#1a')
   const identity = makeUserIdentitySync(
     {
       email: overrides.email ?? 'user@example.com',
@@ -61,7 +61,7 @@ describe('AuthenticateUserUseCase', () => {
     const result = await sut.execute({
       tenantId: 'tenant-1',
       email: 'user@example.com',
-      password: 'P@ssw0rd!',
+      password: 'Fixture#1a',
     })
 
     expect(result.isRight()).toBe(true)
@@ -74,7 +74,7 @@ describe('AuthenticateUserUseCase', () => {
   it('should create a UserSession on success', async () => {
     await setupUser({ identityRepo, profileRepo, authRepo })
 
-    await sut.execute({ tenantId: 'tenant-1', email: 'user@example.com', password: 'P@ssw0rd!' })
+    await sut.execute({ tenantId: 'tenant-1', email: 'user@example.com', password: 'Fixture#1a' })
 
     expect(sessionRepo.items).toHaveLength(1)
     expect(sessionRepo.items[0].isValid()).toBe(true)
@@ -86,7 +86,7 @@ describe('AuthenticateUserUseCase', () => {
     const result = await sut.execute({
       tenantId: 'tenant-1',
       email: 'user@example.com',
-      password: 'WrongPass1!',
+      password: 'Fixture#Bad1',
     })
 
     expect(result.isLeft()).toBe(true)
@@ -97,7 +97,7 @@ describe('AuthenticateUserUseCase', () => {
     const result = await sut.execute({
       tenantId: 'tenant-1',
       email: 'ghost@example.com',
-      password: 'P@ssw0rd!',
+      password: 'Fixture#1a',
     })
 
     expect(result.isLeft()).toBe(true)
@@ -107,7 +107,7 @@ describe('AuthenticateUserUseCase', () => {
   it('should increment failedLoginAttempts on wrong password', async () => {
     await setupUser({ identityRepo, profileRepo, authRepo })
 
-    await sut.execute({ tenantId: 'tenant-1', email: 'user@example.com', password: 'WrongPass1!' })
+    await sut.execute({ tenantId: 'tenant-1', email: 'user@example.com', password: 'Fixture#Bad1' })
 
     expect(identityRepo.items[0].failedLoginAttempts).toBe(1)
   })
@@ -115,8 +115,8 @@ describe('AuthenticateUserUseCase', () => {
   it('should reset failedLoginAttempts on successful login', async () => {
     await setupUser({ identityRepo, profileRepo, authRepo })
 
-    await sut.execute({ tenantId: 'tenant-1', email: 'user@example.com', password: 'WrongPass1!' })
-    await sut.execute({ tenantId: 'tenant-1', email: 'user@example.com', password: 'P@ssw0rd!' })
+    await sut.execute({ tenantId: 'tenant-1', email: 'user@example.com', password: 'Fixture#Bad1' })
+    await sut.execute({ tenantId: 'tenant-1', email: 'user@example.com', password: 'Fixture#1a' })
 
     expect(identityRepo.items[0].failedLoginAttempts).toBe(0)
   })
@@ -127,7 +127,7 @@ describe('AuthenticateUserUseCase', () => {
     const result = await sut.execute({
       tenantId: 'tenant-1',
       email: 'user@example.com',
-      password: 'P@ssw0rd!',
+      password: 'Fixture#1a',
     })
 
     expect(result.isLeft()).toBe(true)
@@ -138,7 +138,7 @@ describe('AuthenticateUserUseCase', () => {
     const result = await sut.execute({
       tenantId: 'tenant-1',
       email: 'not-an-email',
-      password: 'P@ssw0rd!',
+      password: 'Fixture#1a',
     })
 
     expect(result.isLeft()).toBe(true)

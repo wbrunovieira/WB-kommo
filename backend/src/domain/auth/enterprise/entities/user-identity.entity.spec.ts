@@ -9,7 +9,7 @@ async function makeIdentity(overrides: Partial<{
   email: string
   tenantId: string
 }> = {}) {
-  const password = await Password.create('P@ssw0rd!')
+  const password = await Password.create('Fixture#1a')
   return UserIdentity.create({
     tenantId: overrides.tenantId ?? 'tenant-1',
     email: Email.create(overrides.email ?? 'user@example.com'),
@@ -36,7 +36,7 @@ describe('UserIdentity', () => {
 
   describe('reconstitute()', () => {
     it('should NOT emit domain events when reconstituting from DB', async () => {
-      const password = await Password.create('P@ssw0rd!')
+      const password = await Password.create('Fixture#1a')
       const identity = UserIdentity.reconstitute(
         {
           tenantId: 'tenant-1',

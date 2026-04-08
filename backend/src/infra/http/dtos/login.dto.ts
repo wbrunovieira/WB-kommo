@@ -13,7 +13,7 @@ export class LoginDto {
   @IsEmail()
   email!: string
 
-  @ApiProperty({ example: 'Secret@123' })
+  @ApiProperty({ example: '••••••••' })
   @IsString()
   @MinLength(1)
   password!: string

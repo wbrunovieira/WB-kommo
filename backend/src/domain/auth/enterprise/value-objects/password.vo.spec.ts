@@ -4,8 +4,8 @@ import { Password } from './password.vo'
 describe('Password VO', () => {
   describe('create()', () => {
     it('should hash a valid password', async () => {
-      const pwd = await Password.create('P@ssw0rd!')
-      expect(pwd.value).not.toBe('P@ssw0rd!')
+      const pwd = await Password.create('Fixture#1a')
+      expect(pwd.value).not.toBe('Fixture#1a')
       expect(pwd.value.length).toBeGreaterThan(20)
     })
 
@@ -40,21 +40,21 @@ describe('Password VO', () => {
 
   describe('compare()', () => {
     it('should return true for correct raw password', async () => {
-      const pwd = await Password.create('P@ssw0rd!')
-      expect(await pwd.compare('P@ssw0rd!')).toBe(true)
+      const pwd = await Password.create('Fixture#1a')
+      expect(await pwd.compare('Fixture#1a')).toBe(true)
     })
 
     it('should return false for wrong raw password', async () => {
-      const pwd = await Password.create('P@ssw0rd!')
+      const pwd = await Password.create('Fixture#1a')
       expect(await pwd.compare('Wrong1@pass')).toBe(false)
     })
   })
 
   describe('createFromHash()', () => {
     it('should create password from existing hash without re-hashing', async () => {
-      const original = await Password.create('P@ssw0rd!')
+      const original = await Password.create('Fixture#1a')
       const fromHash = Password.createFromHash(original.value)
-      expect(await fromHash.compare('P@ssw0rd!')).toBe(true)
+      expect(await fromHash.compare('Fixture#1a')).toBe(true)
     })
   })
 
