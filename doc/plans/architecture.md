@@ -1,10 +1,10 @@
 # WB-Kommo — CRM SaaS: Documento de Arquitetura
 
-> Versão 1.7 — 2026-04-07
+> Versão 1.8 — 2026-04-08
 
 ---
 
-> **Estado atual de implementação — 2026-04-07**
+> **Estado atual de implementação — 2026-04-08**
 >
 > | Camada | Status |
 > |--------|--------|
@@ -13,13 +13,18 @@
 > | Auth application — use cases + repos | ✅ Implementado |
 > | Auth infra — Prisma repos + mappers | ✅ Implementado |
 > | Auth HTTP — controller + DTOs + presenter | ✅ Implementado |
+> | Refresh Token em httpOnly cookie (`wb_refresh_token`) | ✅ Implementado |
+> | Workspace slug no login (`ITenantRepository.findBySlug`) | ✅ Implementado |
+> | Seed automático na inicialização (`SeedService`) | ✅ Implementado |
 > | Swagger — rotas de auth documentadas | ✅ Implementado |
 > | GlobalExceptionFilter (RFC 7807) | ✅ Implementado |
-> | Testes — 155 passando (unit + integration + E2E) | ✅ Implementado |
+> | Testes — 161 passando (133 unit + 13 integration + 15 E2E) | ✅ Implementado |
 > | Docker dev + Docker testes isolados | ✅ Implementado |
-> | TypeScript sem erros (`tsc --noEmit` limpo) | ✅ Implementado |
+> | TypeScript sem erros (`esModuleInterop`, `tsc --noEmit` limpo) | ✅ Implementado |
+> | Frontend — Login + Dashboard (Next.js 15 App Router) | ✅ Implementado |
+> | Frontend — i18n next-intl (pt, en, it, es) com cookie de preferência | ✅ Implementado |
+> | Frontend — Workspace lembrado no localStorage | ✅ Implementado |
 > | Logging estruturado (nestjs-pino) | 📋 Planejado (Fase 4) |
-> | Frontend (Next.js 15) | ⬜ Não iniciado |
 > | Módulos CRM (leads, pipelines, activities) | ⬜ Não iniciado |
 
 ---
@@ -143,14 +148,32 @@ WB-kommo/
 │
 ├── frontend/                         # Next.js 15 (App Router)
 │   ├── src/
-│   │   ├── app/[locale]/             # Rotas internacionalizadas
-│   │   ├── i18n/                     # next-intl config
-│   │   ├── messages/                 # pt.json, en.json, it.json, es.json
+│   │   ├── app/
+│   │   │   ├── layout.tsx            # Root transparente (sem html/body)
+│   │   │   ├── page.tsx              # Stub — middleware redireciona para [locale]
+│   │   │   └── [locale]/             # Segmento dinâmico de locale
+│   │   │       ├── layout.tsx        # html lang={locale} + NextIntlClientProvider
+│   │   │       ├── page.tsx          # Redireciona para /[locale]/login
+│   │   │       ├── login/page.tsx
+│   │   │       └── dashboard/page.tsx
+│   │   ├── i18n/
+│   │   │   ├── routing.ts            # defineRouting — locales, defaultLocale, localeCookie
+│   │   │   ├── request.ts            # getRequestConfig — carrega namespaces por locale
+│   │   │   └── navigation.ts        # Link/redirect/useRouter tipados com locale
 │   │   ├── components/
-│   │   ├── features/
+│   │   │   ├── login-form.tsx        # Form com workspace lembrado + spinner durante nav
+│   │   │   └── language-switcher.tsx # Botões PT/EN/IT/ES
 │   │   ├── lib/
-│   │   ├── middleware.ts
-│   │   └── styles/
+│   │   │   ├── api.ts                # fetch wrapper com credentials: 'include'
+│   │   │   └── auth.ts              # localStorage: accessToken + user
+│   │   ├── global.d.ts              # Type augmentation AppConfig.Messages (PT = source of truth)
+│   │   └── middleware.ts            # createMiddleware(routing) — detecta e redireciona locale
+│   ├── messages/                    # Split por namespace dentro de cada locale
+│   │   ├── pt/
+│   │   │   ├── common.json          # app, nav, roles, actions, erros genéricos
+│   │   │   ├── auth.json            # login (e futuro register, forgot-password)
+│   │   │   └── dashboard.json
+│   │   ├── en/  it/  es/            # Mesma estrutura
 │   └── .env.example
 │
 └── doc/
@@ -778,8 +801,11 @@ async create(@Body() dto: CreateUserDto, @CurrentUser() actor: JwtPayload) {
 
 ### 3.13 Autenticação
 
-- Access Token (JWT, 15min) + Refresh Token (7 dias, httpOnly cookie).
-- Refresh Token: hash SHA256 armazenado na `UserSession` — token raw nunca persiste.
+- Access Token (JWT HS256, 15min) retornado no body da resposta.
+- Refresh Token (7 dias) armazenado em cookie **httpOnly** `wb_refresh_token` (`Path=/auth; SameSite=Lax; Secure` em produção). JS não tem acesso ao token.
+- Token raw nunca persiste — hash SHA256 armazenado na `UserSession`.
+- `cookie-parser` middleware lê `req.cookies.wb_refresh_token` no `POST /auth/refresh`.
+- Login aceita `workspace` (slug) em vez de `tenantId` — `ITenantRepository.findBySlug()` resolve no controller.
 - Guards: `JwtAuthGuard`, `RolesGuard`, `TenantGuard`, `ImpersonationGuard`.
 - Rate limiting no login: 5 tentativas/minuto → bloqueia conta por 15min.
 - Bloqueio de conta rastreado no `UserIdentity` (`failedLoginAttempts`, `lockedUntil`).
@@ -1527,140 +1553,104 @@ src/
 └── middleware.ts             # createMiddleware(routing) — detecta e redireciona locale
 ```
 
-#### Configuração de roteamento
+#### Configuração de roteamento (implementado)
 
 ```typescript
 // src/i18n/routing.ts
-import { defineRouting } from 'next-intl/routing'
-
 export const routing = defineRouting({
   locales: ['pt', 'en', 'it', 'es'],
   defaultLocale: 'pt',
-  localePrefix: 'as-needed',   // /pt omitido, /en /it /es explícitos
+  localeDetection: true,        // detecta Accept-Language na primeira visita
+  localeCookie: {               // persiste preferência por 1 ano
+    name: 'wb_locale',
+    maxAge: 60 * 60 * 24 * 365,
+    sameSite: 'lax',
+  },
 })
 ```
 
 ```typescript
-// src/i18n/request.ts
-import { getRequestConfig } from 'next-intl/server'
-import { routing } from './routing'
+// src/i18n/request.ts — carrega namespaces e faz merge no nível raiz
+const NAMESPACES = ['common', 'auth', 'dashboard'] as const
 
 export default getRequestConfig(async ({ requestLocale }) => {
-  const locale = (await requestLocale) ?? routing.defaultLocale
-  return {
-    locale,
-    messages: (await import(`../messages/${locale}.json`)).default,
-  }
+  const locale = ...
+  const modules = await Promise.all(
+    NAMESPACES.map((ns) => import(`../../messages/${locale}/${ns}.json`)),
+  )
+  const messages = modules.reduce((acc, mod) => ({ ...acc, ...mod.default }), {})
+  return { locale, messages }
 })
 ```
 
-```typescript
-// src/middleware.ts
-import createMiddleware from 'next-intl/middleware'
-import { routing } from './i18n/routing'
+> **Adicionando um novo módulo:** criar `messages/{locale}/leads.json` para cada locale e adicionar `'leads'` ao array `NAMESPACES`. Nenhuma outra mudança necessária.
 
-export default createMiddleware(routing)
+#### Estrutura de mensagens — split por namespace
 
-export const config = {
-  matcher: ['/((?!api|_next|_vercel|.*\\..*).*)'],
-}
+```
+messages/
+  pt/
+    common.json     ← app, nav, roles, actions, erros genéricos (compartilhado)
+    auth.json       ← chave "login" (e futuro "register", "forgotPassword")
+    dashboard.json  ← chave "dashboard"
+  en/  it/  es/    ← mesma estrutura
 ```
 
-#### Estrutura de mensagens
-
-```json
-// messages/pt.json
-{
-  "common": {
-    "save": "Salvar",
-    "cancel": "Cancelar",
-    "delete": "Excluir",
-    "loading": "Carregando...",
-    "noResults": "Nenhum resultado encontrado"
-  },
-  "auth": {
-    "login": "Entrar",
-    "logout": "Sair",
-    "email": "E-mail",
-    "password": "Senha",
-    "forgotPassword": "Esqueceu a senha?"
-  },
-  "leads": {
-    "title": "Leads",
-    "newLead": "Novo Lead",
-    "status": {
-      "open": "Aberto",
-      "won": "Ganho",
-      "lost": "Perdido"
-    }
-  },
-  "pipeline": {
-    "title": "Pipeline",
-    "stage": "Estágio",
-    "moveToStage": "Mover para {stage}"
-  },
-  "impersonation": {
-    "banner": "Visualizando como: {clientName}",
-    "exit": "Sair da visualização"
-  }
-}
-```
-
-#### Uso em Server Components (RSC)
-
-```typescript
-// app/[locale]/(workspace)/leads/page.tsx
-import { getTranslations } from 'next-intl/server'
-
-export default async function LeadsPage() {
-  const t = await getTranslations('leads')
-  return <h1>{t('title')}</h1>
-}
-```
-
-#### Uso em Client Components
-
-```typescript
-'use client'
-import { useTranslations } from 'next-intl'
-
-export function LeadCard({ lead }: { lead: Lead }) {
-  const t = useTranslations('leads')
-  return <span>{t('status.open')}</span>
-}
-```
+As chaves dentro de cada arquivo são espalhadas no nível raiz do objeto `messages`, então `useTranslations('login')` funciona com `auth.json` transparentemente.
 
 #### Type-safety das mensagens
 
 ```typescript
-// Geração automática de tipos a partir das mensagens
-// next-intl infere os tipos de messages/pt.json como fonte da verdade
-// t('leads.nonExistent') → erro de TypeScript em tempo de desenvolvimento
+// src/global.d.ts — PT é a source of truth
+import type commonMessages from '../messages/pt/common.json'
+import type authMessages from '../messages/pt/auth.json'
+import type dashboardMessages from '../messages/pt/dashboard.json'
+
+declare module 'next-intl' {
+  interface AppConfig {
+    Messages: typeof commonMessages & typeof authMessages & typeof dashboardMessages
+  }
+}
+// t('login.nonExistent') → erro de TypeScript em build
 ```
 
-#### Seletor de idioma no Header
+#### Uso em Server Components e Client Components
 
-- Dropdown com bandeiras/nomes dos idiomas.
-- Troca de locale via `useRouter` + `usePathname` do `next-intl/navigation`.
-- Preferência persistida em cookie (lida pelo middleware para redirect automático).
-- Locale do usuário também sincronizado com o campo `language` do `UserProfile` no backend.
+```typescript
+// Server Component (RSC)
+import { useTranslations } from 'next-intl'
+const t = useTranslations('login')   // ou 'dashboard', 'common'
 
-### 7.3 Estrutura de Pastas (com i18n)
+// Client Component
+'use client'
+import { useTranslations } from 'next-intl'
+const t = useTranslations('dashboard')
+```
+
+#### Seletor de idioma
+
+- `LanguageSwitcher` — botões PT/EN/IT/ES presentes na página de login e no header do dashboard.
+- Troca via `router.replace(pathname, { locale: next })` de `@/i18n/navigation`.
+- next-intl atualiza automaticamente o cookie `wb_locale` na troca — próxima visita restaura o idioma salvo.
+- Primeira visita sem cookie: `Accept-Language` do browser é usado (via `localeDetection: true`).
+
+### 7.3 Estrutura de Pastas (com i18n — estado atual + planejado)
 
 ```
 frontend/src/
 ├── app/
-│   └── [locale]/                 # Segmento dinâmico de locale
-│       ├── layout.tsx            # NextIntlClientProvider aqui
-│       ├── (auth)/
-│       │   ├── login/page.tsx
-│       │   └── layout.tsx
-│       ├── (reseller)/
-│       │   ├── dashboard/page.tsx
+│   ├── layout.tsx                # ✅ Root transparente (retorna children)
+│   ├── page.tsx                  # ✅ Stub — middleware redireciona
+│   └── [locale]/                 # ✅ Segmento dinâmico de locale
+│       ├── layout.tsx            # ✅ html lang={locale} + NextIntlClientProvider
+│       ├── page.tsx              # ✅ Redireciona → /[locale]/login
+│       ├── login/page.tsx        # ✅ Implementado
+│       ├── dashboard/page.tsx    # ✅ Implementado
+│       ├── (reseller)/           # 📋 Fase 3
 │       │   ├── clients/page.tsx
 │       │   ├── clients/[id]/page.tsx
 │       │   └── layout.tsx
-│       └── (workspace)/
+│       └── (workspace)/          # 📋 Fase 2
 │           ├── leads/page.tsx
 │           ├── pipeline/[id]/page.tsx
 │           ├── contacts/page.tsx
@@ -1668,34 +1658,20 @@ frontend/src/
 │           ├── settings/
 │           └── layout.tsx
 ├── i18n/
-│   ├── routing.ts
-│   ├── request.ts
-│   └── navigation.ts             # Link/redirect/useRouter tipados
-├── messages/
-│   ├── pt.json                   # Fonte da verdade (tipos gerados a partir daqui)
-│   ├── en.json
-│   ├── it.json
-│   └── es.json
+│   ├── routing.ts                # ✅ locales, defaultLocale, localeCookie
+│   ├── request.ts                # ✅ namespace merge dinâmico
+│   └── navigation.ts             # ✅ Link/redirect/useRouter tipados
 ├── components/
-│   ├── ui/
-│   ├── layout/
-│   │   └── locale-switcher.tsx   # Seletor de idioma
-│   ├── kanban/
-│   ├── lead/
-│   └── shared/
-├── features/
-│   ├── auth/
-│   ├── leads/
-│   ├── pipeline/
-│   └── tenants/
+│   ├── login-form.tsx            # ✅ workspace lembrado, spinner durante nav
+│   ├── language-switcher.tsx     # ✅ botões PT/EN/IT/ES
+│   └── (kanban/, lead/, shared/ — Fase 2)
 ├── lib/
-│   ├── api/
-│   ├── hooks/
-│   ├── stores/
-│   └── utils/
-├── middleware.ts
+│   ├── api.ts                    # ✅ fetch com credentials: 'include'
+│   └── auth.ts                   # ✅ localStorage: accessToken + user
+├── global.d.ts                   # ✅ AppConfig.Messages type augmentation
+├── middleware.ts                  # ✅ locale detection + redirect
 └── styles/
-    └── globals.css
+    └── globals.css               # ✅ CSS variables dark theme
 ```
 
 ### 7.3 Impersonation no Frontend
@@ -1827,14 +1803,24 @@ Reseller → POST /auth/impersonate/:tenantId
 - [x] Use cases: CreateUser, AuthenticateUser, RefreshToken, LogoutUser
 - [x] Impersonation: ImpersonateUseCase + EndImpersonationUseCase + UserSession
 - [x] Prisma repositories + mappers (identity, profile, authorization, session)
-- [x] Auth HTTP: AuthController + DTOs (Register, Login, RefreshToken) + AuthPresenter
+- [x] Auth HTTP: AuthController + DTOs (Register, Login com workspace slug) + AuthPresenter
+- [x] Refresh Token em httpOnly cookie (`wb_refresh_token`) — JS sem acesso
+- [x] `ITenantRepository.findBySlug()` — login aceita workspace slug em vez de tenantId
+- [x] `SeedService` — seed idempotente executado na inicialização (`OnModuleInit`)
+- [x] `esModuleInterop: true` no tsconfig — cookie-parser CJS/ESM compat
 - [x] GlobalExceptionFilter com error-mappings RFC 7807
 - [x] Swagger: auth routes documentadas em inglês (`/docs`)
-- [x] Setup Vitest (unit + integration + e2e) — **155 testes passando**
+- [x] Setup Vitest (unit + integration + e2e) — **161 testes passando**
 - [x] Docker testes isolados (Dockerfile.test + docker-compose.test.yml)
 - [x] TypeScript sem erros (`npx tsc --noEmit` limpo)
-- [ ] Setup Next.js + Tailwind + shadcn
-- [ ] Telas de Login e Dashboard base
+- [x] Setup Next.js 15 + Tailwind CSS 4 (App Router)
+- [x] Tela de Login — workspace, email, senha (eye toggle), spinner mantido durante navegação
+- [x] Tela de Dashboard base — user info, logout
+- [x] i18n com next-intl v4 — pt/en/it/es, detecção de browser, cookie `wb_locale` (1 ano)
+- [x] Mensagens divididas por namespace (`messages/{locale}/common|auth|dashboard.json`)
+- [x] TypeScript type augmentation para chaves de tradução (`global.d.ts`)
+- [x] `LanguageSwitcher` — PT/EN/IT/ES no login e header do dashboard
+- [x] Workspace lembrado em localStorage — pré-preenchido com badge "Lembrado / Alterar"
 
 ### Fase 2 — Core CRM (Semanas 4-7)
 - [ ] Módulo Leads + Pipelines + Stages
@@ -1865,3 +1851,5 @@ Reseller → POST /auth/impersonate/:tenantId
 ---
 
 *Versão 1.7 — atualizado em 2026-04-07: status de implementação adicionado (tabela de estado atual + roadmap com checkboxes); Fase 1 completa — 155 testes passando, auth HTTP layer, Swagger, GlobalExceptionFilter RFC 7807, Docker testes isolados, TypeScript limpo; logging estruturado planejado para Fase 4 com `nestjs-pino`.*
+
+*Versão 1.8 — atualizado em 2026-04-08: frontend Next.js 15 implementado (login + dashboard); i18n next-intl v4 com pt/en/it/es, detecção de browser, cookie de preferência e mensagens split por namespace; Refresh Token movido para httpOnly cookie; login aceita workspace slug; SeedService automático na inicialização; `esModuleInterop` adicionado ao tsconfig; workspace lembrado em localStorage; 161 testes passando.*
