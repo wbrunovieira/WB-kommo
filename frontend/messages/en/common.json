@@ -1,0 +1,30 @@
+{
+  "app": {
+    "name": "WB Kommo",
+    "tagline": "CRM SaaS for lead and pipeline management"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "leads": "Leads",
+    "pipelines": "Pipelines",
+    "settings": "Settings"
+  },
+  "roles": {
+    "RESELLER": "Reseller",
+    "ACCOUNT_ADMIN": "Administrator",
+    "MEMBER": "Member"
+  },
+  "actions": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "delete": "Delete",
+    "back": "Back"
+  },
+  "errors": {
+    "unexpected": "Unexpected error. Please try again.",
+    "network": "Connection error. Please check your internet.",
+    "forbidden": "You don't have permission to perform this action.",
+    "notFound": "Resource not found."
+  }
+}

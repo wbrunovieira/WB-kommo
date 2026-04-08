@@ -1,0 +1,17 @@
+{
+  "dashboard": {
+    "title": "Panel de control",
+    "welcome": "¡Bienvenido de nuevo!",
+    "loggedAs": "Has iniciado sesión como",
+    "userId": "ID de usuario",
+    "tenantId": "ID de tenant",
+    "role": "Rol",
+    "logout": "Cerrar sesión",
+    "comingSoon": "Panel en construcción — leads, pipelines y mucho más próximamente.",
+    "roles": {
+      "RESELLER": "Revendedor",
+      "ACCOUNT_ADMIN": "Administrador",
+      "MEMBER": "Miembro"
+    }
+  }
+}

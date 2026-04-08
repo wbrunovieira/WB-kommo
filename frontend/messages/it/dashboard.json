@@ -1,0 +1,17 @@
+{
+  "dashboard": {
+    "title": "Dashboard",
+    "welcome": "Bentornato!",
+    "loggedAs": "Sei connesso come",
+    "userId": "ID Utente",
+    "tenantId": "ID Tenant",
+    "role": "Ruolo",
+    "logout": "Esci",
+    "comingSoon": "Dashboard in costruzione — lead, pipeline e molto altro in arrivo.",
+    "roles": {
+      "RESELLER": "Rivenditore",
+      "ACCOUNT_ADMIN": "Amministratore",
+      "MEMBER": "Membro"
+    }
+  }
+}
