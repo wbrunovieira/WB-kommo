@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common'
 import { Either, left, right } from '@/core/errors/either'
 import { ITenantRepository, TenantSummary, TenantListItem } from '@/domain/tenants/application/repositories/i-tenant.repository'
+import { Tenant } from '@/domain/tenants/enterprise/entities/tenant.entity'
 import { PrismaService } from '../prisma.service'
 
 const LIST_SELECT = { id: true, name: true, slug: true, isActive: true, resellerTenantId: true } as const
@@ -42,6 +43,24 @@ export class PrismaTenantRepository implements ITenantRepository {
         orderBy: { name: 'asc' },
       })
       return right(tenants)
+    } catch (err) {
+      return left(err instanceof Error ? err : new Error(String(err)))
+    }
+  }
+
+  async save(tenant: Tenant): Promise<Either<Error, void>> {
+    try {
+      await this.prisma.tenant.create({
+        data: {
+          id: tenant.id.toString(),
+          name: tenant.name,
+          slug: tenant.slug,
+          planId: tenant.planId,
+          isActive: tenant.isActive,
+          resellerTenantId: tenant.resellerTenantId,
+        },
+      })
+      return right(undefined)
     } catch (err) {
       return left(err instanceof Error ? err : new Error(String(err)))
     }

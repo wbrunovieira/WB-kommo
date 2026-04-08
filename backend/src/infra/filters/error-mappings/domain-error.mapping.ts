@@ -12,5 +12,6 @@ export const domainErrorMapping: Record<string, ErrorMapping> = {
   SessionNotFoundError: { status: 401, title: 'Session not found or expired' },
   UnauthorizedError: { status: 403, title: 'Insufficient permissions' },
   TenantNotFoundError: { status: 404, title: 'Tenant not found' },
+  TenantSlugTakenError: { status: 409, title: 'Slug already taken' },
   PlanLimitExceededError: { status: 422, title: 'Plan limit exceeded' },
 }

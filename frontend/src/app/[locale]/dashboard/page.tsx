@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl'
 import { useRouter } from '@/i18n/navigation'
 import { getUser, clearSession, StoredUser } from '@/lib/auth'
 import { LanguageSwitcher } from '@/components/language-switcher'
+import { CreateClientSection } from '@/components/create-client-section'
 
 export default function DashboardPage() {
   const t = useTranslations('dashboard')
@@ -149,7 +150,12 @@ export default function DashboardPage() {
           <InfoCard label={t('role')} value={roleLabel} accent />
         </div>
 
-        {/* Placeholder */}
+        {/* Create client section — visible to RESELLER and PLATFORM_OWNER */}
+        {(user.role === 'RESELLER' || user.role === 'PLATFORM_OWNER') && (
+          <CreateClientSection role={user.role} tenantId={user.tenantId} />
+        )}
+
+        {/* Coming soon placeholder */}
         <div
           style={{
             marginTop: '40px',

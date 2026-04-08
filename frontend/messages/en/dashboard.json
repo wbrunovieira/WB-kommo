@@ -9,9 +9,37 @@
     "logout": "Sign Out",
     "comingSoon": "Dashboard under construction — leads, pipelines and much more coming soon.",
     "roles": {
+      "PLATFORM_OWNER": "Platform Owner",
       "RESELLER": "Reseller",
       "ACCOUNT_ADMIN": "Administrator",
       "MEMBER": "Member"
+    },
+    "createClient": {
+      "sectionTitle": "Register new company",
+      "sectionDesc": "Create a client company and its administrator login.",
+      "companyName": "Company name",
+      "companyNamePlaceholder": "E.g. Acme Corporation",
+      "slug": "Identifier (slug)",
+      "slugPlaceholder": "acme-corp",
+      "slugHint": "Lowercase letters and hyphens only. Used at login.",
+      "adminName": "Administrator name",
+      "adminNamePlaceholder": "John Smith",
+      "adminEmail": "Administrator email",
+      "adminEmailPlaceholder": "john@acme.com",
+      "adminPassword": "Administrator password",
+      "adminPasswordPlaceholder": "Minimum 8 characters",
+      "submit": "Create company",
+      "submitting": "Creating...",
+      "successTitle": "Company created!",
+      "successDesc": "The company {name} was created. The administrator can log in using the slug {slug}.",
+      "createAnother": "Create another company",
+      "errors": {
+        "409": "This identifier is already taken. Try another.",
+        "401": "Session expired. Please log in again.",
+        "403": "You do not have permission to create companies.",
+        "422": "Invalid data. Please check the fields.",
+        "unknown": "Unexpected error. Please try again."
+      }
     }
   }
 }

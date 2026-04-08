@@ -9,9 +9,37 @@
     "logout": "Sair",
     "comingSoon": "Dashboard em construção — leads, pipelines e muito mais em breve.",
     "roles": {
+      "PLATFORM_OWNER": "Dono da Plataforma",
       "RESELLER": "Revendedor",
       "ACCOUNT_ADMIN": "Administrador",
       "MEMBER": "Membro"
+    },
+    "createClient": {
+      "sectionTitle": "Cadastrar nova empresa",
+      "sectionDesc": "Crie uma empresa cliente e o login do administrador.",
+      "companyName": "Nome da empresa",
+      "companyNamePlaceholder": "Ex: Acme Corporação",
+      "slug": "Identificador (slug)",
+      "slugPlaceholder": "acme-corp",
+      "slugHint": "Apenas letras minúsculas e hífens. Usado no login.",
+      "adminName": "Nome do administrador",
+      "adminNamePlaceholder": "João Silva",
+      "adminEmail": "E-mail do administrador",
+      "adminEmailPlaceholder": "joao@acme.com",
+      "adminPassword": "Senha do administrador",
+      "adminPasswordPlaceholder": "Mínimo 8 caracteres",
+      "submit": "Criar empresa",
+      "submitting": "Criando...",
+      "successTitle": "Empresa criada!",
+      "successDesc": "A empresa {name} foi criada. O administrador pode acessar com o slug {slug}.",
+      "createAnother": "Criar outra empresa",
+      "errors": {
+        "409": "Este identificador já está em uso. Tente outro.",
+        "401": "Sessão expirada. Faça login novamente.",
+        "403": "Você não tem permissão para criar empresas.",
+        "422": "Dados inválidos. Verifique os campos.",
+        "unknown": "Erro inesperado. Tente novamente."
+      }
     }
   }
 }
