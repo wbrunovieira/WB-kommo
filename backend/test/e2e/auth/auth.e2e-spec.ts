@@ -20,6 +20,12 @@ async function seedPlanAndTenant(prisma: PrismaService, tenantId: string) {
   })
 }
 
+function extractRefreshTokenFromCookie(setCookieHeader: string[] | string | undefined): string {
+  const headers = Array.isArray(setCookieHeader) ? setCookieHeader : [setCookieHeader ?? '']
+  const cookie = headers.find(c => c.startsWith('wb_refresh_token='))
+  return cookie?.match(/wb_refresh_token=([^;]+)/)?.[1] ?? ''
+}
+
 describe('Auth routes (E2E)', () => {
   let app: INestApplication
   let prisma: PrismaService
@@ -102,7 +108,7 @@ describe('Auth routes (E2E)', () => {
       })
     })
 
-    it('200 — returns access + refresh tokens', async () => {
+    it('200 — returns accessToken in body and refresh token in httpOnly cookie', async () => {
       const res = await request(app.getHttpServer()).post('/auth/login').send({
         workspace: TENANT_ID,
         email: USER_EMAIL,
@@ -111,8 +117,13 @@ describe('Auth routes (E2E)', () => {
 
       expect(res.status).toBe(200)
       expect(res.body.accessToken).toBeDefined()
-      expect(res.body.refreshToken).toBeDefined()
       expect(res.body.tokenType).toBe('Bearer')
+      expect(res.body.refreshToken).toBeUndefined()
+
+      const cookie = res.headers['set-cookie'] as unknown as string[]
+      expect(cookie).toBeDefined()
+      expect(cookie[0]).toContain('wb_refresh_token=')
+      expect(cookie[0]).toContain('HttpOnly')
     })
 
     it('401 — rejects wrong password', async () => {
@@ -164,8 +175,7 @@ describe('Auth routes (E2E)', () => {
   // ─── POST /auth/refresh ───────────────────────────────────────────────────
 
   describe('POST /auth/refresh', () => {
-    it('200 — rotates refresh token', async () => {
-      // Register + login to get a refresh token
+    it('200 — rotates refresh token via cookie', async () => {
       await request(app.getHttpServer()).post('/auth/register').send({
         tenantId: TENANT_ID,
         name: 'Refresh User',
@@ -178,22 +188,33 @@ describe('Auth routes (E2E)', () => {
         email: 'refresh@e2e.com',
         password: 'Secret@123',
       })
-      const { refreshToken } = loginRes.body
+      const oldRefreshToken = extractRefreshTokenFromCookie(
+        loginRes.headers['set-cookie'] as unknown as string[],
+      )
 
       const res = await request(app.getHttpServer())
         .post('/auth/refresh')
-        .send({ refreshToken })
+        .set('Cookie', `wb_refresh_token=${oldRefreshToken}`)
 
       expect(res.status).toBe(200)
-      expect(res.body.refreshToken).toBeDefined()
-      expect(res.body.refreshToken).not.toBe(refreshToken) // token rotated
       expect(res.body.accessToken).toBeDefined()
+      expect(res.body.refreshToken).toBeUndefined()
+
+      const newCookie = res.headers['set-cookie'] as unknown as string[]
+      const newRefreshToken = extractRefreshTokenFromCookie(newCookie)
+      expect(newRefreshToken).toBeDefined()
+      expect(newRefreshToken).not.toBe(oldRefreshToken) // token rotated
+    })
+
+    it('401 — rejects missing cookie', async () => {
+      const res = await request(app.getHttpServer()).post('/auth/refresh')
+      expect(res.status).toBe(401)
     })
 
     it('401 — rejects invalid refresh token', async () => {
       const res = await request(app.getHttpServer())
         .post('/auth/refresh')
-        .send({ refreshToken: 'invalid-token-value' })
+        .set('Cookie', 'wb_refresh_token=invalid-token-value')
 
       expect(res.status).toBe(401)
     })
@@ -211,15 +232,19 @@ describe('Auth routes (E2E)', () => {
         email: 'replay@e2e.com',
         password: 'Secret@123',
       })
-      const { refreshToken } = loginRes.body
+      const refreshToken = extractRefreshTokenFromCookie(
+        loginRes.headers['set-cookie'] as unknown as string[],
+      )
 
       // Use token once
-      await request(app.getHttpServer()).post('/auth/refresh').send({ refreshToken })
+      await request(app.getHttpServer())
+        .post('/auth/refresh')
+        .set('Cookie', `wb_refresh_token=${refreshToken}`)
 
       // Replay the same old token
       const replayRes = await request(app.getHttpServer())
         .post('/auth/refresh')
-        .send({ refreshToken })
+        .set('Cookie', `wb_refresh_token=${refreshToken}`)
 
       expect(replayRes.status).toBe(401)
     })
@@ -241,7 +266,10 @@ describe('Auth routes (E2E)', () => {
         email: 'logout@e2e.com',
         password: 'Secret@123',
       })
-      const { accessToken, refreshToken } = loginRes.body
+      const accessToken = loginRes.body.accessToken
+      const refreshToken = extractRefreshTokenFromCookie(
+        loginRes.headers['set-cookie'] as unknown as string[],
+      )
 
       const res = await request(app.getHttpServer())
         .post('/auth/logout')
@@ -252,7 +280,7 @@ describe('Auth routes (E2E)', () => {
       // refresh token should now be invalid
       const refreshRes = await request(app.getHttpServer())
         .post('/auth/refresh')
-        .send({ refreshToken })
+        .set('Cookie', `wb_refresh_token=${refreshToken}`)
 
       expect(refreshRes.status).toBe(401)
     })
@@ -316,7 +344,10 @@ describe('Auth routes (E2E)', () => {
 
       expect(res.status).toBe(200)
       expect(res.body.accessToken).toBeDefined()
-      expect(res.body.refreshToken).toBeDefined()
+      expect(res.body.refreshToken).toBeUndefined()
+
+      const cookie = res.headers['set-cookie'] as unknown as string[]
+      expect(extractRefreshTokenFromCookie(cookie)).toBeTruthy()
     })
 
     it('403 — MEMBER cannot impersonate', async () => {

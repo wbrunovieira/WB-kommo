@@ -6,17 +6,20 @@ import {
   Param,
   Post,
   Req,
+  Res,
+  UnauthorizedException,
 } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
 import {
   ApiBearerAuth,
   ApiBody,
+  ApiCookieAuth,
   ApiOperation,
   ApiParam,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger'
-import type { Request } from 'express'
+import type { Request, Response } from 'express'
 import { RegisterUserUseCase } from '@/domain/auth/application/use-cases/register-user/register-user.use-case'
 import { AuthenticateUserUseCase } from '@/domain/auth/application/use-cases/authenticate-user/authenticate-user.use-case'
 import { RefreshTokenUseCase } from '@/domain/auth/application/use-cases/refresh-token/refresh-token.use-case'
@@ -29,12 +32,25 @@ import { Public } from '@/infra/auth/decorators/public.decorator'
 import { Roles } from '@/infra/auth/decorators/roles.decorator'
 import { RegisterUserDto } from '../dtos/register-user.dto'
 import { LoginDto } from '../dtos/login.dto'
-import { RefreshTokenDto } from '../dtos/refresh-token.dto'
 import { AuthPresenter, AuthTokensResponse, RegisteredUserResponse } from '../presenters/auth.presenter'
+
+const REFRESH_COOKIE = 'wb_refresh_token'
+
+function refreshCookieOptions(isProduction: boolean) {
+  return {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: 'lax' as const,
+    path: '/auth',
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  }
+}
 
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
+  private readonly isProduction = process.env.NODE_ENV === 'production'
+
   constructor(
     private readonly registerUseCase: RegisterUserUseCase,
     private readonly authenticateUseCase: AuthenticateUserUseCase,
@@ -72,7 +88,9 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Login',
-    description: 'Authenticates the user and returns a JWT access token (15 min) and a refresh token (7 days).',
+    description:
+      'Authenticates the user. Returns a JWT access token (15 min) in the body and sets ' +
+      'an httpOnly wb_refresh_token cookie (7 days) for token rotation.',
   })
   @ApiBody({ type: LoginDto })
   @ApiResponse({ status: 200, description: 'Login successful.', type: AuthTokensResponse })
@@ -80,7 +98,11 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Invalid credentials.' })
   @ApiResponse({ status: 404, description: 'Workspace not found.' })
   @ApiResponse({ status: 423, description: 'Account temporarily locked after 5 failed attempts.' })
-  async login(@Body() dto: LoginDto, @Req() req: Request) {
+  async login(
+    @Body() dto: LoginDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const tenantResult = await this.tenantRepository.findBySlug(dto.workspace)
     if (tenantResult.isLeft()) throw tenantResult.value
     if (!tenantResult.value) throw new TenantNotFoundError(dto.workspace)
@@ -100,7 +122,9 @@ export class AuthController {
     const { userId, role, refreshToken } = result.value
     const accessToken = this.jwtService.sign({ sub: userId, tenantId, role })
 
-    return AuthPresenter.toTokens({ accessToken, refreshToken, userId, tenantId, role })
+    res.cookie(REFRESH_COOKIE, refreshToken, refreshCookieOptions(this.isProduction))
+
+    return AuthPresenter.toTokens({ accessToken, userId, tenantId, role })
   }
 
   // ─── POST /auth/logout ──────────────────────────────────────────────────
@@ -110,13 +134,18 @@ export class AuthController {
   @ApiBearerAuth('access-token')
   @ApiOperation({
     summary: 'Logout',
-    description: 'Revokes all active sessions for the authenticated user.',
+    description: 'Revokes all active sessions for the authenticated user and clears the refresh token cookie.',
   })
   @ApiResponse({ status: 204, description: 'Logout successful.' })
   @ApiResponse({ status: 401, description: 'Missing or invalid token.' })
-  async logout(@CurrentUser() user: CurrentUserPayload) {
+  async logout(
+    @CurrentUser() user: CurrentUserPayload,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const result = await this.logoutUseCase.execute({ identityId: user.sub })
     if (result.isLeft()) throw result.value
+
+    res.clearCookie(REFRESH_COOKIE, { path: '/auth' })
   }
 
   // ─── POST /auth/refresh ─────────────────────────────────────────────────
@@ -124,22 +153,29 @@ export class AuthController {
   @Public()
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
+  @ApiCookieAuth(REFRESH_COOKIE)
   @ApiOperation({
     summary: 'Refresh tokens',
-    description: 'Token rotation: invalidates the current refresh token and issues a new token pair.',
+    description:
+      'Token rotation: reads wb_refresh_token cookie, invalidates it and issues a new token pair. ' +
+      'New refresh token is set as an httpOnly cookie.',
   })
-  @ApiBody({ type: RefreshTokenDto })
   @ApiResponse({ status: 200, description: 'Tokens successfully refreshed.', type: AuthTokensResponse })
-  @ApiResponse({ status: 401, description: 'Invalid, expired or already-used refresh token (replay attack detected).' })
-  async refresh(@Body() dto: RefreshTokenDto) {
-    const result = await this.refreshTokenUseCase.execute({ refreshToken: dto.refreshToken })
+  @ApiResponse({ status: 401, description: 'Missing, invalid, expired or already-used refresh token.' })
+  async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const rawToken: string | undefined = req.cookies?.[REFRESH_COOKIE]
+    if (!rawToken) throw new UnauthorizedException('Refresh token cookie is missing')
+
+    const result = await this.refreshTokenUseCase.execute({ refreshToken: rawToken })
     if (result.isLeft()) throw result.value
 
     const { userId, tenantId, refreshToken } = result.value
     const role = 'MEMBER'
     const accessToken = this.jwtService.sign({ sub: userId, tenantId, role })
 
-    return AuthPresenter.toTokens({ accessToken, refreshToken, userId, tenantId, role })
+    res.cookie(REFRESH_COOKIE, refreshToken, refreshCookieOptions(this.isProduction))
+
+    return AuthPresenter.toTokens({ accessToken, userId, tenantId, role })
   }
 
   // ─── POST /auth/impersonate/:tenantId ───────────────────────────────────
@@ -160,6 +196,7 @@ export class AuthController {
     @Param('tenantId') targetTenantId: string,
     @CurrentUser() user: CurrentUserPayload,
     @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
   ) {
     const result = await this.impersonateUseCase.execute({
       resellerId: user.sub,
@@ -179,9 +216,10 @@ export class AuthController {
       impersonatorId: user.sub,
     })
 
+    res.cookie(REFRESH_COOKIE, refreshToken, refreshCookieOptions(this.isProduction))
+
     return AuthPresenter.toTokens({
       accessToken,
-      refreshToken,
       userId: sessionId,
       tenantId: targetTenantId,
       role: 'RESELLER',
@@ -199,8 +237,13 @@ export class AuthController {
   })
   @ApiResponse({ status: 204, description: 'Impersonation session ended.' })
   @ApiResponse({ status: 401, description: 'Not authenticated.' })
-  async endImpersonation(@CurrentUser() user: CurrentUserPayload) {
+  async endImpersonation(
+    @CurrentUser() user: CurrentUserPayload,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const result = await this.logoutUseCase.execute({ identityId: user.sub })
     if (result.isLeft()) throw result.value
+
+    res.clearCookie(REFRESH_COOKIE, { path: '/auth' })
   }
 }

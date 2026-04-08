@@ -4,9 +4,6 @@ export class AuthTokensResponse {
   @ApiProperty({ example: 'eyJhbGciOiJIUzI1NiJ9...' })
   accessToken!: string
 
-  @ApiProperty()
-  refreshToken!: string
-
   @ApiProperty({ example: 'Bearer' })
   tokenType!: 'Bearer'
 
@@ -37,14 +34,12 @@ export class RegisteredUserResponse {
 export class AuthPresenter {
   static toTokens(data: {
     accessToken: string
-    refreshToken: string
     userId: string
     tenantId: string
     role: string
   }): AuthTokensResponse {
     return {
       accessToken: data.accessToken,
-      refreshToken: data.refreshToken,
       tokenType: 'Bearer',
       userId: data.userId,
       tenantId: data.tenantId,

@@ -8,7 +8,6 @@ export interface LoginPayload {
 
 export interface AuthTokens {
   accessToken: string
-  refreshToken: string
   tokenType: string
   userId: string
   tenantId: string
@@ -25,6 +24,7 @@ export async function login(payload: LoginPayload): Promise<AuthTokens> {
   const res = await fetch(`${BASE_URL}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify(payload),
   })
 

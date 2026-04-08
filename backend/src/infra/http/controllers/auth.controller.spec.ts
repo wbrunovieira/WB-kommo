@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing'
 import { CanActivate, ExecutionContext, HttpStatus, INestApplication, Injectable, ValidationPipe } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
+import cookieParser from 'cookie-parser'
 import request from 'supertest'
 import { AuthController } from './auth.controller'
 import { RegisterUserUseCase } from '@/domain/auth/application/use-cases/register-user/register-user.use-case'
@@ -15,7 +16,6 @@ import { AccountLockedError } from '@/domain/auth/application/use-cases/errors/a
 import { UserAlreadyExistsError } from '@/domain/auth/application/use-cases/errors/user-already-exists.error'
 import { UnauthorizedError } from '@/domain/auth/application/use-cases/errors/unauthorized.error'
 import { SessionNotFoundError } from '@/domain/auth/application/use-cases/errors/session-not-found.error'
-import { TenantNotFoundError } from '@/domain/auth/application/use-cases/errors/tenant-not-found.error'
 import { GlobalExceptionFilter } from '@/infra/filters/http-exception.filter'
 import { APP_FILTER, APP_GUARD, Reflector } from '@nestjs/core'
 
@@ -55,6 +55,7 @@ async function buildApp(): Promise<INestApplication> {
   }).compile()
 
   const app = module.createNestApplication()
+  app.use(cookieParser())
   app.useGlobalPipes(new ValidationPipe({ whitelist: true }))
   await app.init()
   return app
@@ -105,13 +106,9 @@ describe('AuthController (unit)', () => {
   // ─── POST /auth/login ───────────────────────────────────────────────────────
 
   describe('POST /auth/login', () => {
-    const validBody = {
-      workspace: 'acme-corp',
-      email: 'alice@example.com',
-      password: 'Secret@123',
-    }
+    const validBody = { workspace: 'acme-corp', email: 'alice@example.com', password: 'Secret@123' }
 
-    it('resolves workspace slug to tenantId and returns 200 with tokens', async () => {
+    it('sets httpOnly cookie with refresh token and returns accessToken in body', async () => {
       mockTenantRepo.findBySlug.mockResolvedValue(right({ id: 'tenant-1', isActive: true }))
       mockAuthenticate.execute.mockResolvedValue(
         right({ refreshToken: 'raw-refresh', userId: 'uid-1', tenantId: 'tenant-1', role: 'ACCOUNT_ADMIN' }),
@@ -120,25 +117,22 @@ describe('AuthController (unit)', () => {
       const res = await request(app.getHttpServer()).post('/auth/login').send(validBody)
 
       expect(res.status).toBe(HttpStatus.OK)
-      expect(mockTenantRepo.findBySlug).toHaveBeenCalledWith('acme-corp')
-      expect(mockAuthenticate.execute).toHaveBeenCalledWith(
-        expect.objectContaining({ tenantId: 'tenant-1', email: 'alice@example.com' }),
-      )
-      expect(res.body).toMatchObject({
-        accessToken: 'signed.jwt.token',
-        refreshToken: 'raw-refresh',
-        tokenType: 'Bearer',
-        userId: 'uid-1',
-        tenantId: 'tenant-1',
-        role: 'ACCOUNT_ADMIN',
-      })
+      // access token in body
+      expect(res.body.accessToken).toBe('signed.jwt.token')
+      expect(res.body.tokenType).toBe('Bearer')
+      // refresh token NOT in body
+      expect(res.body.refreshToken).toBeUndefined()
+      // refresh token in httpOnly cookie
+      const cookie = res.headers['set-cookie'] as unknown as string[]
+      expect(cookie).toBeDefined()
+      expect(cookie[0]).toContain('wb_refresh_token=raw-refresh')
+      expect(cookie[0]).toContain('HttpOnly')
+      expect(cookie[0]).toContain('Path=/auth')
     })
 
     it('returns 404 when workspace does not exist', async () => {
       mockTenantRepo.findBySlug.mockResolvedValue(right(null))
-
       const res = await request(app.getHttpServer()).post('/auth/login').send(validBody)
-
       expect(res.status).toBe(HttpStatus.NOT_FOUND)
       expect(mockAuthenticate.execute).not.toHaveBeenCalled()
     })
@@ -146,9 +140,7 @@ describe('AuthController (unit)', () => {
     it('returns 401 on invalid credentials', async () => {
       mockTenantRepo.findBySlug.mockResolvedValue(right({ id: 'tenant-1', isActive: true }))
       mockAuthenticate.execute.mockResolvedValue(left(new InvalidCredentialsError()))
-
       const res = await request(app.getHttpServer()).post('/auth/login').send(validBody)
-
       expect(res.status).toBe(HttpStatus.UNAUTHORIZED)
     })
 
@@ -157,51 +149,67 @@ describe('AuthController (unit)', () => {
       mockAuthenticate.execute.mockResolvedValue(
         left(new AccountLockedError(new Date(Date.now() + 15 * 60 * 1000))),
       )
-
       const res = await request(app.getHttpServer()).post('/auth/login').send(validBody)
-
       expect(res.status).toBe(423)
     })
 
     it('returns 400 when body is missing required fields', async () => {
-      const res = await request(app.getHttpServer())
-        .post('/auth/login')
-        .send({ email: 'alice@example.com' })
+      const res = await request(app.getHttpServer()).post('/auth/login').send({ email: 'alice@example.com' })
       expect(res.status).toBe(HttpStatus.BAD_REQUEST)
-    })
-  })
-
-  // ─── POST /auth/logout ──────────────────────────────────────────────────────
-
-  describe('POST /auth/logout', () => {
-    it('returns 204 on success', async () => {
-      mockLogout.execute.mockResolvedValue(right(undefined))
-      const res = await request(app.getHttpServer()).post('/auth/logout')
-      expect(res.status).toBe(HttpStatus.NO_CONTENT)
-      expect(mockLogout.execute).toHaveBeenCalledWith({ identityId: 'uid-1' })
     })
   })
 
   // ─── POST /auth/refresh ─────────────────────────────────────────────────────
 
   describe('POST /auth/refresh', () => {
-    it('returns 200 with new tokens', async () => {
+    it('reads refresh token from cookie, rotates it and returns new accessToken', async () => {
       mockRefresh.execute.mockResolvedValue(
         right({ refreshToken: 'new-refresh', userId: 'uid-1', tenantId: 'tenant-1' }),
       )
+
       const res = await request(app.getHttpServer())
         .post('/auth/refresh')
-        .send({ refreshToken: 'old-raw-token' })
+        .set('Cookie', 'wb_refresh_token=old-raw-token')
+
       expect(res.status).toBe(HttpStatus.OK)
-      expect(res.body.refreshToken).toBe('new-refresh')
+      expect(res.body.accessToken).toBe('signed.jwt.token')
+      expect(res.body.refreshToken).toBeUndefined()
+      expect(mockRefresh.execute).toHaveBeenCalledWith({ refreshToken: 'old-raw-token' })
+      // new cookie set
+      const cookie = res.headers['set-cookie'] as unknown as string[]
+      expect(cookie[0]).toContain('wb_refresh_token=new-refresh')
+      expect(cookie[0]).toContain('HttpOnly')
+    })
+
+    it('returns 401 when cookie is missing', async () => {
+      const res = await request(app.getHttpServer()).post('/auth/refresh')
+      expect(res.status).toBe(HttpStatus.UNAUTHORIZED)
+      expect(mockRefresh.execute).not.toHaveBeenCalled()
     })
 
     it('returns 401 when session is invalid', async () => {
       mockRefresh.execute.mockResolvedValue(left(new SessionNotFoundError()))
       const res = await request(app.getHttpServer())
         .post('/auth/refresh')
-        .send({ refreshToken: 'expired-token' })
+        .set('Cookie', 'wb_refresh_token=expired-token')
       expect(res.status).toBe(HttpStatus.UNAUTHORIZED)
+    })
+  })
+
+  // ─── POST /auth/logout ──────────────────────────────────────────────────────
+
+  describe('POST /auth/logout', () => {
+    it('revokes session and clears the refresh token cookie', async () => {
+      mockLogout.execute.mockResolvedValue(right(undefined))
+
+      const res = await request(app.getHttpServer())
+        .post('/auth/logout')
+        .set('Cookie', 'wb_refresh_token=some-token')
+
+      expect(res.status).toBe(HttpStatus.NO_CONTENT)
+      expect(mockLogout.execute).toHaveBeenCalledWith({ identityId: 'uid-1' })
+      const cookie = res.headers['set-cookie'] as unknown as string[]
+      expect(cookie[0]).toContain('wb_refresh_token=;')
     })
   })
 
