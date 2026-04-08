@@ -1,21 +1,56 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { useRouter } from '@/i18n/navigation'
 import { login, ApiError } from '@/lib/api'
 import { saveSession } from '@/lib/auth'
+
+const WORKSPACE_KEY = 'wb_workspace'
+
+function getSavedWorkspace(): string {
+  if (typeof window === 'undefined') return ''
+  return localStorage.getItem(WORKSPACE_KEY) ?? ''
+}
+
+function saveWorkspace(value: string) {
+  localStorage.setItem(WORKSPACE_KEY, value)
+}
+
+function clearWorkspace() {
+  localStorage.removeItem(WORKSPACE_KEY)
+}
 
 export function LoginForm() {
   const t = useTranslations('login')
   const router = useRouter()
 
   const [workspace, setWorkspace] = useState('')
+  const [isSaved, setIsSaved] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const saved = getSavedWorkspace()
+    if (saved) {
+      setWorkspace(saved)
+      setIsSaved(true)
+    }
+  }, [])
+
+  function handleWorkspaceChange(value: string) {
+    setWorkspace(value)
+    setIsSaved(value === getSavedWorkspace() && value !== '')
+  }
+
+  function handleClearWorkspace() {
+    clearWorkspace()
+    setWorkspace('')
+    setIsSaved(false)
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -24,6 +59,7 @@ export function LoginForm() {
 
     try {
       const tokens = await login({ workspace, email, password })
+      saveWorkspace(workspace)
       saveSession(tokens)
       router.push('/dashboard')
     } catch (err) {
@@ -44,11 +80,25 @@ export function LoginForm() {
     <form onSubmit={handleSubmit} noValidate style={{ width: '100%' }}>
       {/* Workspace */}
       <div style={{ marginBottom: '20px' }}>
-        <label style={labelStyle}>{t('workspace')}</label>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+          <label style={labelStyle}>{t('workspace')}</label>
+          {isSaved && (
+            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={savedBadgeStyle}>{t('workspaceSaved')}</span>
+              <button
+                type="button"
+                onClick={handleClearWorkspace}
+                style={clearLinkStyle}
+              >
+                {t('workspaceClear')}
+              </button>
+            </span>
+          )}
+        </div>
         <input
           type="text"
           value={workspace}
-          onChange={(e) => setWorkspace(e.target.value)}
+          onChange={(e) => handleWorkspaceChange(e.target.value)}
           placeholder={t('workspacePlaceholder')}
           required
           autoComplete="organization"
@@ -182,12 +232,33 @@ function Spinner() {
 
 const labelStyle: React.CSSProperties = {
   display: 'block',
-  marginBottom: '8px',
   fontSize: '13px',
   fontWeight: 500,
   color: '#8888aa',
   letterSpacing: '0.02em',
   textTransform: 'uppercase',
+}
+
+const savedBadgeStyle: React.CSSProperties = {
+  fontSize: '11px',
+  fontWeight: 600,
+  color: '#6bffb8',
+  backgroundColor: 'rgba(107, 255, 184, 0.1)',
+  border: '1px solid rgba(107, 255, 184, 0.25)',
+  borderRadius: '4px',
+  padding: '2px 6px',
+  letterSpacing: '0.02em',
+}
+
+const clearLinkStyle: React.CSSProperties = {
+  background: 'none',
+  border: 'none',
+  color: '#8888aa',
+  fontSize: '11px',
+  cursor: 'pointer',
+  padding: 0,
+  textDecoration: 'underline',
+  textUnderlineOffset: '2px',
 }
 
 const inputStyle: React.CSSProperties = {
@@ -200,6 +271,7 @@ const inputStyle: React.CSSProperties = {
   fontSize: '15px',
   outline: 'none',
   transition: 'border-color 0.2s',
+  marginTop: '8px',
 }
 
 const inputFocusStyle: React.CSSProperties = {
