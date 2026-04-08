@@ -34,12 +34,27 @@
       "successDesc": "La empresa {name} fue creada. El administrador puede iniciar sesión con el slug {slug}.",
       "createAnother": "Crear otra empresa",
       "errors": {
-        "409": "Este identificador ya está en uso. Intenta con otro.",
         "401": "Sesión expirada. Inicia sesión de nuevo.",
         "403": "No tienes permiso para crear empresas.",
+        "409": "Este identificador ya está en uso. Intenta con otro.",
         "422": "Datos inválidos. Revisa los campos.",
         "unknown": "Error inesperado. Inténtalo de nuevo."
       }
+    },
+    "tenantList": {
+      "sectionTitle": "Tus empresas",
+      "sectionDesc": "Haz clic en una empresa para acceder a su entorno.",
+      "empty": "No hay empresas registradas aún.",
+      "enter": "Entrar",
+      "loading": "Cargando...",
+      "active": "Activo",
+      "inactive": "Inactivo",
+      "client": "cliente",
+      "reseller": "revendedor"
+    },
+    "impersonation": {
+      "banner": "Estás visualizando como",
+      "exit": "Salir de la empresa"
     }
   }
 }

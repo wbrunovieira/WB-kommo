@@ -19,6 +19,10 @@ export class InMemoryTenantRepository implements ITenantRepository {
     return right(this.items.filter((t) => t.resellerTenantId === null))
   }
 
+  async findAll(): Promise<Either<Error, TenantListItem[]>> {
+    return right([...this.items])
+  }
+
   async save(tenant: Tenant): Promise<Either<Error, void>> {
     this.savedTenants.push(tenant)
     this.items.push({

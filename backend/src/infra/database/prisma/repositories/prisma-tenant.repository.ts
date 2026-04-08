@@ -48,6 +48,18 @@ export class PrismaTenantRepository implements ITenantRepository {
     }
   }
 
+  async findAll(): Promise<Either<Error, TenantListItem[]>> {
+    try {
+      const tenants = await this.prisma.tenant.findMany({
+        select: LIST_SELECT,
+        orderBy: { name: 'asc' },
+      })
+      return right(tenants)
+    } catch (err) {
+      return left(err instanceof Error ? err : new Error(String(err)))
+    }
+  }
+
   async save(tenant: Tenant): Promise<Either<Error, void>> {
     try {
       await this.prisma.tenant.create({

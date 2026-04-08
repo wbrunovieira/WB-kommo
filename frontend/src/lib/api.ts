@@ -20,6 +20,14 @@ export interface ApiError {
   detail: string
 }
 
+export interface TenantListItem {
+  id: string
+  name: string
+  slug: string
+  isActive: boolean
+  resellerTenantId: string | null
+}
+
 export interface CreateTenantPayload {
   name: string
   slug: string
@@ -88,6 +96,14 @@ export async function login(payload: LoginPayload): Promise<AuthTokens> {
   }
 
   return res.json()
+}
+
+export async function getTenants(accessToken: string): Promise<TenantListItem[]> {
+  return apiFetch<TenantListItem[]>('/tenants', { method: 'GET' }, accessToken)
+}
+
+export async function impersonate(targetTenantId: string, accessToken: string): Promise<AuthTokens> {
+  return apiFetch<AuthTokens>(`/auth/impersonate/${targetTenantId}`, { method: 'POST' }, accessToken)
 }
 
 export async function createTenant(payload: CreateTenantPayload, accessToken: string): Promise<CreatedTenant> {

@@ -1,6 +1,7 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common'
 import { Test, TestingModule } from '@nestjs/testing'
 import request from 'supertest'
+import cookieParser from 'cookie-parser'
 import { AppModule } from '@/app.module'
 import { PrismaService } from '@/infra/database/prisma/prisma.service'
 
@@ -38,6 +39,7 @@ describe('Auth routes (E2E)', () => {
     }).compile()
 
     app = module.createNestApplication()
+    app.use(cookieParser())
     app.useGlobalPipes(new ValidationPipe({ whitelist: true }))
     await app.init()
 
@@ -299,11 +301,17 @@ describe('Auth routes (E2E)', () => {
     const TARGET_TENANT_ID = 'e2e-target-tenant'
 
     beforeAll(async () => {
-      // Seed target tenant
+      // Seed target tenant — linked to the reseller's tenant so ownership check passes
       await prisma.tenant.upsert({
         where: { id: TARGET_TENANT_ID },
         update: {},
-        create: { id: TARGET_TENANT_ID, name: 'Target Tenant', slug: TARGET_TENANT_ID, planId: 'e2e-plan-1' },
+        create: {
+          id: TARGET_TENANT_ID,
+          name: 'Target Tenant',
+          slug: TARGET_TENANT_ID,
+          planId: 'e2e-plan-1',
+          resellerTenantId: TENANT_ID,
+        },
       })
 
       // Register RESELLER

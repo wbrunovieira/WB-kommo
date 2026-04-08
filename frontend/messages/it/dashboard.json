@@ -34,12 +34,27 @@
       "successDesc": "L'azienda {name} è stata creata. L'amministratore può accedere con lo slug {slug}.",
       "createAnother": "Crea un'altra azienda",
       "errors": {
-        "409": "Questo identificatore è già in uso. Provane un altro.",
         "401": "Sessione scaduta. Effettua di nuovo il login.",
         "403": "Non hai il permesso di creare aziende.",
+        "409": "Questo identificatore è già in uso. Provane un altro.",
         "422": "Dati non validi. Controlla i campi.",
         "unknown": "Errore imprevisto. Riprova."
       }
+    },
+    "tenantList": {
+      "sectionTitle": "Le tue aziende",
+      "sectionDesc": "Clicca su un'azienda per accedere al suo ambiente.",
+      "empty": "Nessuna azienda registrata ancora.",
+      "enter": "Entra",
+      "loading": "Caricamento...",
+      "active": "Attivo",
+      "inactive": "Inattivo",
+      "client": "cliente",
+      "reseller": "rivenditore"
+    },
+    "impersonation": {
+      "banner": "Stai visualizzando come",
+      "exit": "Esci dall'azienda"
     }
   }
 }

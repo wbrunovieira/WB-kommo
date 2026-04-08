@@ -6,6 +6,9 @@ import { useRouter } from '@/i18n/navigation'
 import { getUser, clearSession, StoredUser } from '@/lib/auth'
 import { LanguageSwitcher } from '@/components/language-switcher'
 import { CreateClientSection } from '@/components/create-client-section'
+import { TenantListSection } from '@/components/tenant-list-section'
+import { ImpersonationBanner } from '@/components/impersonation-banner'
+import { isImpersonating } from '@/lib/auth'
 
 export default function DashboardPage() {
   const t = useTranslations('dashboard')

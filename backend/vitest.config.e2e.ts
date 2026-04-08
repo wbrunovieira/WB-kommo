@@ -19,11 +19,14 @@ export default defineConfig({
     include: ['test/e2e/**/*.e2e-spec.ts'],
     setupFiles: ['./test/setup-e2e.ts'],
     environment: 'node',
-    testTimeout: 30_000,
-    hookTimeout: 60_000,
+    testTimeout: 60_000,
+    hookTimeout: 120_000,
+    // E2E tests mutate process.env.DATABASE_URL per file (isolated schema).
+    // Using forks (separate processes) prevents cross-file schema contamination.
+    pool: 'forks',
     poolOptions: {
-      threads: {
-        maxThreads: 5,
+      forks: {
+        singleFork: true,   // one process at a time — safe sequential isolation
       },
     },
   },

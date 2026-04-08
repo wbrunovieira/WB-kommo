@@ -14,6 +14,7 @@ import { RefreshTokenUseCase } from '@/domain/auth/application/use-cases/refresh
 import { LogoutUseCase } from '@/domain/auth/application/use-cases/logout/logout.use-case'
 import { ImpersonateUserUseCase } from '@/domain/auth/application/use-cases/impersonate-user/impersonate-user.use-case'
 import { CreateTenantUseCase } from '@/domain/tenants/application/use-cases/create-tenant/create-tenant.use-case'
+import { ListTenantsUseCase } from '@/domain/tenants/application/use-cases/list-tenants/list-tenants.use-case'
 import { TenantsController } from '@/infra/http/controllers/tenants.controller'
 
 @Module({
@@ -39,6 +40,7 @@ import { TenantsController } from '@/infra/http/controllers/tenants.controller'
     LogoutUseCase,
     ImpersonateUserUseCase,
     CreateTenantUseCase,
+    ListTenantsUseCase,
   ],
   exports: [JwtAuthGuard, RolesGuard, JwtModule, DatabaseModule],
 })

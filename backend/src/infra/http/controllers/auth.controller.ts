@@ -222,9 +222,9 @@ export class AuthController {
 
     return AuthPresenter.toTokens({
       accessToken,
-      userId: sessionId,
+      userId: user.sub,
       tenantId: targetTenantId,
-      role: 'RESELLER',
+      role: user.role,
     })
   }
 

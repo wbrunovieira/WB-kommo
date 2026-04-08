@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   Post,
@@ -15,14 +16,42 @@ import {
 import { CurrentUser, CurrentUserPayload } from '@/infra/auth/decorators/current-user.decorator'
 import { Roles } from '@/infra/auth/decorators/roles.decorator'
 import { CreateTenantUseCase } from '@/domain/tenants/application/use-cases/create-tenant/create-tenant.use-case'
+import { ListTenantsUseCase } from '@/domain/tenants/application/use-cases/list-tenants/list-tenants.use-case'
 import { CreateTenantDto } from '../dtos/create-tenant.dto'
+import { RoleType } from '@/domain/auth/enterprise/value-objects/user-role.vo'
 
 const DEFAULT_PLAN_ID = 'plan-reseller'
 
 @ApiTags('tenants')
 @Controller('tenants')
 export class TenantsController {
-  constructor(private readonly createTenantUseCase: CreateTenantUseCase) {}
+  constructor(
+    private readonly createTenantUseCase: CreateTenantUseCase,
+    private readonly listTenantsUseCase: ListTenantsUseCase,
+  ) {}
+
+  // ─── GET /tenants ─────────────────────────────────────────────────────────
+
+  @Roles('RESELLER', 'PLATFORM_OWNER')
+  @Get()
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary: 'List accessible tenants',
+    description:
+      'RESELLER: returns their client tenants. PLATFORM_OWNER: returns all tenants.',
+  })
+  @ApiResponse({ status: 200, description: 'List of tenants.' })
+  @ApiResponse({ status: 401, description: 'Not authenticated.' })
+  @ApiResponse({ status: 403, description: 'Insufficient role.' })
+  async list(@CurrentUser() user: CurrentUserPayload) {
+    const result = await this.listTenantsUseCase.execute({
+      actorRole: user.role as RoleType,
+      actorTenantId: user.tenantId,
+    })
+    if (result.isLeft()) throw result.value
+    return result.value
+  }
 
   // ─── POST /tenants ────────────────────────────────────────────────────────
 
@@ -48,8 +77,8 @@ export class TenantsController {
   ) {
     const resellerTenantId =
       user.role === 'RESELLER'
-        ? user.tenantId                          // always scope to their own tenant
-        : (dto.resellerTenantId ?? null)         // PLATFORM_OWNER decides
+        ? user.tenantId
+        : (dto.resellerTenantId ?? null)
 
     const result = await this.createTenantUseCase.execute({
       name: dto.name,
@@ -59,7 +88,6 @@ export class TenantsController {
     })
 
     if (result.isLeft()) throw result.value
-
     return result.value
   }
 }

@@ -98,6 +98,23 @@ describe('PrismaTenantRepository (integration)', () => {
     })
   })
 
+  describe('findAll', () => {
+    it('returns every tenant regardless of resellerTenantId', async () => {
+      await prismaService.tenant.create({
+        data: { id: 'fa-res', name: 'Reseller FA', slug: 'reseller-fa', planId: 'plan-test-tenant', isActive: true, resellerTenantId: null },
+      })
+      await prismaService.tenant.create({
+        data: { id: 'fa-cli', name: 'Client FA', slug: 'client-fa', planId: 'plan-test-tenant', isActive: true, resellerTenantId: 'fa-res' },
+      })
+
+      const result = await repo.findAll()
+
+      expect(result.isRight()).toBe(true)
+      if (!result.isRight()) throw new Error('expected right')
+      expect(result.value.length).toBeGreaterThanOrEqual(2)
+    })
+  })
+
   describe('findAllResellers', () => {
     it('returns only tenants with resellerTenantId = null', async () => {
       await prismaService.tenant.create({

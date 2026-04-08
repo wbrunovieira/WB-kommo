@@ -34,12 +34,27 @@
       "successDesc": "The company {name} was created. The administrator can log in using the slug {slug}.",
       "createAnother": "Create another company",
       "errors": {
-        "409": "This identifier is already taken. Try another.",
         "401": "Session expired. Please log in again.",
         "403": "You do not have permission to create companies.",
+        "409": "This identifier is already taken. Try another.",
         "422": "Invalid data. Please check the fields.",
         "unknown": "Unexpected error. Please try again."
       }
+    },
+    "tenantList": {
+      "sectionTitle": "Your companies",
+      "sectionDesc": "Click a company to access its environment.",
+      "empty": "No companies registered yet.",
+      "enter": "Enter",
+      "loading": "Loading...",
+      "active": "Active",
+      "inactive": "Inactive",
+      "client": "client",
+      "reseller": "reseller"
+    },
+    "impersonation": {
+      "banner": "You are viewing as",
+      "exit": "Exit company"
     }
   }
 }
