@@ -100,6 +100,9 @@ export default function DashboardPage() {
         </div>
       </header>
 
+      {/* Impersonation banner */}
+      {isImpersonating() && <ImpersonationBanner />}
+
       {/* Content */}
       <main style={{ padding: '48px 32px', maxWidth: '900px', margin: '0 auto' }}>
         {/* Welcome card */}
@@ -152,6 +155,11 @@ export default function DashboardPage() {
           <InfoCard label={t('tenantId')} value={user.tenantId} />
           <InfoCard label={t('role')} value={roleLabel} accent />
         </div>
+
+        {/* Tenant list + impersonation — visible to RESELLER and PLATFORM_OWNER */}
+        {(user.role === 'RESELLER' || user.role === 'PLATFORM_OWNER') && (
+          <TenantListSection currentTenantId={user.tenantId} />
+        )}
 
         {/* Create client section — visible to RESELLER and PLATFORM_OWNER */}
         {(user.role === 'RESELLER' || user.role === 'PLATFORM_OWNER') && (
