@@ -1,0 +1,8 @@
+{
+  "prisma.prisma7Support": false,
+  "prisma.enableDiagnostics": false,
+  "[prisma]": {
+    "editor.defaultFormatter": "Prisma.prisma"
+  },
+  "typescript.updateImportsOnFileMove.enabled": "always"
+}
