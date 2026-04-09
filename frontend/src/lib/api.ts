@@ -64,9 +64,15 @@ async function tryRefreshToken(): Promise<string | null> {
     })
     if (!res.ok) return null
     const data: AuthTokens = await res.json()
-    // Update stored session with new token and role
-    const { saveSession } = await import('@/lib/auth')
-    saveSession(data)
+    // Update localStorage directly to avoid circular import with auth.ts
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('wb_access_token', data.accessToken)
+      localStorage.setItem('wb_user', JSON.stringify({
+        userId: data.userId,
+        tenantId: data.tenantId,
+        role: data.role,
+      }))
+    }
     return data.accessToken
   } catch {
     return null
