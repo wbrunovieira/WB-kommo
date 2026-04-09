@@ -104,13 +104,15 @@ export default function PipelinesPage() {
     setStageModalPipelineId(null)
   }
 
-  function onStageUpdated(pipelineId: string, updated: Stage) {
-    setStagesMap(prev => ({
-      ...prev,
-      [pipelineId]: prev[pipelineId]?.map(s =>
-        s.id === updated.id ? updated : s,
-      ) ?? [],
-    }))
+  async function onStageUpdated(pipelineId: string) {
+    const token = getAccessToken()
+    if (token) {
+      const stages = await getStages(pipelineId, token).catch(() => [] as Stage[])
+      setStagesMap(prev => ({
+        ...prev,
+        [pipelineId]: [...stages].sort((a, b) => a.order - b.order),
+      }))
+    }
     setEditStage(null)
   }
 
@@ -142,7 +144,7 @@ export default function PipelinesPage() {
           pipelineId={editStage.pipelineId}
           stage={editStage.stage}
           onClose={() => setEditStage(null)}
-          onUpdated={updated => onStageUpdated(editStage.pipelineId, updated)}
+          onUpdated={() => onStageUpdated(editStage.pipelineId)}
         />
       )}
       {deleteTarget && (
@@ -455,7 +457,7 @@ function EditStageModal({ t, pipelineId, stage, onClose, onUpdated }: {
   pipelineId: string
   stage: Stage
   onClose: () => void
-  onUpdated: (stage: Stage) => void
+  onUpdated: () => void
 }) {
   const [name, setName] = useState(stage.name)
   const [color, setColor] = useState(stage.color ?? '')
@@ -475,8 +477,8 @@ function EditStageModal({ t, pipelineId, stage, onClose, onUpdated }: {
     if (!token) return
     setSubmitting(true); setError('')
     try {
-      const updated = await updateStage(pipelineId, stage.id, { name: name.trim(), color: color.trim() || undefined }, token)
-      onUpdated(updated)
+      await updateStage(pipelineId, stage.id, { name: name.trim(), color: color.trim() || undefined }, token)
+      onUpdated()
     } catch (err: unknown) {
       setError((err as { title?: string })?.title ?? t('editStageModal.errorGeneric'))
       setSubmitting(false)
