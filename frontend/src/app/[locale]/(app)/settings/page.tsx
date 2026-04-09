@@ -77,8 +77,13 @@ export default function SettingsPage() {
   async function handleToggle(config: LeadFieldConfig) {
     const token = getAccessToken()
     if (!token) return
+    // Optimistic update — swap immediately, revert if the API call fails
+    setConfigs(prev => prev.map(c => c.id === config.id ? { ...c, isActive: !c.isActive } : c))
     const updated = await updateLeadFieldConfig(config.id, { isActive: !config.isActive }, token).catch(() => null)
-    if (updated) setConfigs(prev => prev.map(c => c.id === updated.id ? updated : c))
+    if (!updated) {
+      // Revert
+      setConfigs(prev => prev.map(c => c.id === config.id ? { ...c, isActive: config.isActive } : c))
+    }
   }
 
   async function handleDelete(id: string) {
