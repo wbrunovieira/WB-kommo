@@ -7,7 +7,8 @@
     "dashboard": "Dashboard",
     "leads": "Leads",
     "pipelines": "Pipelines",
-    "settings": "Settings"
+    "settings": "Settings",
+    "logout": "Logout"
   },
   "roles": {
     "RESELLER": "Reseller",

@@ -119,3 +119,90 @@ export async function registerUser(payload: RegisterUserPayload, accessToken: st
     body: JSON.stringify(payload),
   }, accessToken)
 }
+
+// ── Leads ──────────────────────────────────────────────────────────────────────
+
+export interface Lead {
+  id: string
+  name: string
+  pipelineId: string
+  stageId: string
+  status: 'OPEN' | 'WON' | 'LOST'
+  value?: number
+  assignedToId?: string
+  tags: string[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface Pipeline {
+  id: string
+  name: string
+  tenantId: string
+  isActive: boolean
+}
+
+export interface Stage {
+  id: string
+  name: string
+  pipelineId: string
+  order: number
+  color?: string
+}
+
+export interface CreateLeadPayload {
+  name: string
+  pipelineId: string
+  stageId: string
+  value?: number
+  assignedToId?: string
+  tags?: string[]
+}
+
+export interface UpdateLeadPayload {
+  name?: string
+  stageId?: string
+  value?: number
+  status?: string
+  tags?: string[]
+}
+
+export async function getLeads(
+  token: string,
+  filters?: { pipelineId?: string; stageId?: string; status?: string },
+): Promise<Lead[]> {
+  const params = new URLSearchParams()
+  if (filters?.pipelineId) params.set('pipelineId', filters.pipelineId)
+  if (filters?.stageId) params.set('stageId', filters.stageId)
+  if (filters?.status) params.set('status', filters.status)
+  const query = params.toString() ? `?${params.toString()}` : ''
+  return apiFetch<Lead[]>(`/leads${query}`, { method: 'GET' }, token)
+}
+
+export async function getLead(id: string, token: string): Promise<Lead> {
+  return apiFetch<Lead>(`/leads/${id}`, { method: 'GET' }, token)
+}
+
+export async function createLead(payload: CreateLeadPayload, token: string): Promise<Lead> {
+  return apiFetch<Lead>('/leads', { method: 'POST', body: JSON.stringify(payload) }, token)
+}
+
+export async function updateLead(id: string, updates: UpdateLeadPayload, token: string): Promise<Lead> {
+  return apiFetch<Lead>(`/leads/${id}`, { method: 'PATCH', body: JSON.stringify(updates) }, token)
+}
+
+export async function softDeleteLead(id: string, token: string): Promise<void> {
+  return apiFetch<void>(`/leads/${id}`, { method: 'DELETE' }, token)
+}
+
+export async function restoreLead(id: string, token: string): Promise<Lead> {
+  return apiFetch<Lead>(`/leads/${id}/restore`, { method: 'POST' }, token)
+}
+
+export async function getPipelines(token: string): Promise<Pipeline[]> {
+  return apiFetch<Pipeline[]>('/pipelines', { method: 'GET' }, token)
+}
+
+export async function getStages(pipelineId: string, token: string): Promise<Stage[]> {
+  return apiFetch<Stage[]>(`/pipelines/${pipelineId}/stages`, { method: 'GET' }, token)
+}

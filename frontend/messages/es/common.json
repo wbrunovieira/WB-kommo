@@ -7,7 +7,8 @@
     "dashboard": "Panel de control",
     "leads": "Leads",
     "pipelines": "Pipelines",
-    "settings": "Configuración"
+    "settings": "Configuración",
+    "logout": "Cerrar sesión"
   },
   "roles": {
     "RESELLER": "Revendedor",

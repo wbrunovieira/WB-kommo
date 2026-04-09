@@ -1,0 +1,21 @@
+{
+  "leads": {
+    "title": "Lead",
+    "subtitle": "Gestisci e monitora i tuoi lead",
+    "newLead": "Nuovo Lead",
+    "allPipelines": "Tutte le pipeline",
+    "allStatuses": "Tutti gli stati",
+    "empty": "Nessun lead trovato",
+    "emptyDesc": "Crea il tuo primo lead per iniziare",
+    "loadError": "Errore nel caricamento dei lead",
+    "status": {
+      "OPEN": "Aperto",
+      "WON": "Vinto",
+      "LOST": "Perso"
+    },
+    "value": "Valore",
+    "pipeline": "Pipeline",
+    "noValue": "Nessun valore",
+    "createdAt": "Creato il"
+  }
+}
