@@ -14,6 +14,8 @@
     "fieldEmail": "Correo electrónico",
     "fieldPassword": "Contraseña",
     "passwordHint": "Mín. 8 caracteres, mayúscula, número y especial",
+    "fieldConfirmPassword": "Confirmar contraseña",
+    "passwordMismatch": "Las contraseñas no coinciden",
     "fieldRole": "Rol",
     "cancel": "Cancelar",
     "save": "Crear usuario",

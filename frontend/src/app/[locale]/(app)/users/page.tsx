@@ -12,6 +12,7 @@ interface CreateUserForm {
   name: string
   email: string
   password: string
+  confirmPassword: string
   role: CreateableRole
   timezone: string
   language: string
@@ -21,6 +22,7 @@ const emptyForm = (): CreateUserForm => ({
   name: '',
   email: '',
   password: '',
+  confirmPassword: '',
   role: 'MEMBER',
   timezone: 'America/Sao_Paulo',
   language: 'pt-BR',
@@ -33,6 +35,8 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [form, setForm] = useState<CreateUserForm>(emptyForm())
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -50,16 +54,29 @@ export default function UsersPage() {
       .finally(() => setLoading(false))
   }, [])
 
+  function closeModal() {
+    setShowModal(false)
+    setForm(emptyForm())
+    setError(null)
+    setShowPassword(false)
+    setShowConfirmPassword(false)
+  }
+
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
     if (!user) return
     const token = getAccessToken()
     if (!token) return
 
+    if (form.password !== form.confirmPassword) {
+      setError(t('passwordMismatch'))
+      return
+    }
+
     setSaving(true)
     setError(null)
     try {
-      const created = await createWorkspaceUser(
+      await createWorkspaceUser(
         {
           tenantId: user.tenantId,
           name: form.name,
@@ -71,11 +88,9 @@ export default function UsersPage() {
         },
         token,
       )
-      // Refresh list
       const updated = await getWorkspaceUsers(token)
       setUsers(updated)
-      setShowModal(false)
-      setForm(emptyForm())
+      closeModal()
     } catch (err: any) {
       setError(err?.detail ?? t('createError'))
     } finally {
@@ -86,6 +101,7 @@ export default function UsersPage() {
   if (!user) return null
 
   const canCreate = user.role !== 'AGENT'
+  const passwordsMatch = form.confirmPassword === '' || form.password === form.confirmPassword
 
   return (
     <div style={{ color: '#e8e8f0', maxWidth: '900px' }}>
@@ -189,12 +205,13 @@ export default function UsersPage() {
           <div style={{
             backgroundColor: '#16213e', borderRadius: '16px', border: '1px solid #2a2a45',
             padding: '28px', width: '440px', maxWidth: '90vw',
+            maxHeight: '90vh', overflowY: 'auto',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
               <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#e8e8f0' }}>
                 {t('addUser')}
               </h2>
-              <button onClick={() => { setShowModal(false); setForm(emptyForm()); setError(null) }}
+              <button onClick={closeModal}
                 style={{ background: 'none', border: 'none', color: '#8888aa', cursor: 'pointer', fontSize: '20px', lineHeight: 1 }}>
                 ×
               </button>
@@ -233,15 +250,32 @@ export default function UsersPage() {
               </FormField>
 
               <FormField label={t('fieldPassword')}>
-                <input
-                  type="password"
+                <PasswordInput
+                  value={form.password}
+                  onChange={(v) => setForm(f => ({ ...f, password: v }))}
+                  show={showPassword}
+                  onToggle={() => setShowPassword(s => !s)}
+                  placeholder={t('passwordHint')}
                   required
                   minLength={8}
-                  placeholder={t('passwordHint')}
-                  value={form.password}
-                  onChange={(e) => setForm(f => ({ ...f, password: e.target.value }))}
-                  style={inputStyle}
                 />
+              </FormField>
+
+              <FormField label={t('fieldConfirmPassword')}>
+                <PasswordInput
+                  value={form.confirmPassword}
+                  onChange={(v) => setForm(f => ({ ...f, confirmPassword: v }))}
+                  show={showConfirmPassword}
+                  onToggle={() => setShowConfirmPassword(s => !s)}
+                  placeholder={t('fieldConfirmPassword')}
+                  required
+                  invalid={!passwordsMatch}
+                />
+                {!passwordsMatch && (
+                  <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#f87171' }}>
+                    {t('passwordMismatch')}
+                  </p>
+                )}
               </FormField>
 
               <FormField label={t('fieldRole')}>
@@ -259,7 +293,7 @@ export default function UsersPage() {
               <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
                 <button
                   type="button"
-                  onClick={() => { setShowModal(false); setForm(emptyForm()); setError(null) }}
+                  onClick={closeModal}
                   style={{
                     flex: 1, padding: '10px', borderRadius: '8px',
                     border: '1px solid #2a2a45', background: 'none',
@@ -270,12 +304,13 @@ export default function UsersPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={saving}
+                  disabled={saving || !passwordsMatch}
                   style={{
                     flex: 1, padding: '10px', borderRadius: '8px',
-                    border: 'none', backgroundColor: saving ? '#4a4370' : '#6c63ff',
+                    border: 'none',
+                    backgroundColor: saving || !passwordsMatch ? '#4a4370' : '#6c63ff',
                     color: '#fff', fontSize: '14px', fontWeight: 600,
-                    cursor: saving ? 'not-allowed' : 'pointer',
+                    cursor: saving || !passwordsMatch ? 'not-allowed' : 'pointer',
                   }}
                 >
                   {saving ? t('saving') : t('save')}
@@ -288,6 +323,61 @@ export default function UsersPage() {
     </div>
   )
 }
+
+// ── PasswordInput ──────────────────────────────────────────────────────────────
+
+interface PasswordInputProps {
+  value: string
+  onChange: (v: string) => void
+  show: boolean
+  onToggle: () => void
+  placeholder?: string
+  required?: boolean
+  minLength?: number
+  invalid?: boolean
+}
+
+function PasswordInput({ value, onChange, show, onToggle, placeholder, required, minLength, invalid }: PasswordInputProps) {
+  return (
+    <div style={{ position: 'relative' }}>
+      <input
+        type={show ? 'text' : 'password'}
+        required={required}
+        minLength={minLength}
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={{
+          ...inputStyle,
+          paddingRight: '42px',
+          borderColor: invalid ? '#f87171' : '#2a2a45',
+        }}
+      />
+      <button
+        type="button"
+        onClick={onToggle}
+        tabIndex={-1}
+        style={{
+          position: 'absolute',
+          right: '10px',
+          top: '50%',
+          transform: 'translateY(-50%)',
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
+          padding: '2px',
+          color: '#8888aa',
+          display: 'flex',
+          alignItems: 'center',
+        }}
+      >
+        {show ? <EyeOffIcon /> : <EyeIcon />}
+      </button>
+    </div>
+  )
+}
+
+// ── helpers ────────────────────────────────────────────────────────────────────
 
 const inputStyle: React.CSSProperties = {
   width: '100%',
@@ -308,6 +398,25 @@ function FormField({ label, children }: { label: string; children: React.ReactNo
       </label>
       {children}
     </div>
+  )
+}
+
+function EyeIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  )
+}
+
+function EyeOffIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+      <line x1="1" y1="1" x2="23" y2="23" />
+    </svg>
   )
 }
 
