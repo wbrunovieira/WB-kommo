@@ -14,6 +14,8 @@ import { DeletePipelineUseCase } from '@/domain/pipelines/application/use-cases/
 import { ListPipelinesUseCase } from '@/domain/pipelines/application/use-cases/list-pipelines/list-pipelines.use-case'
 import { CreateStageUseCase } from '@/domain/pipelines/application/use-cases/create-stage/create-stage.use-case'
 import { ListStagesUseCase } from '@/domain/pipelines/application/use-cases/list-stages/list-stages.use-case'
+import { UpdateStageUseCase } from '@/domain/pipelines/application/use-cases/update-stage/update-stage.use-case'
+import { ReorderStagesUseCase } from '@/domain/pipelines/application/use-cases/reorder-stages/reorder-stages.use-case'
 
 @Module({
   imports: [DatabaseModule],
@@ -31,6 +33,8 @@ import { ListStagesUseCase } from '@/domain/pipelines/application/use-cases/list
     ListPipelinesUseCase,
     CreateStageUseCase,
     ListStagesUseCase,
+    UpdateStageUseCase,
+    ReorderStagesUseCase,
   ],
 })
 export class CrmModule {}

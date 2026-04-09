@@ -260,3 +260,20 @@ export interface CreateStagePayload {
 export async function createStage(pipelineId: string, payload: CreateStagePayload, token: string): Promise<Stage> {
   return apiFetch<Stage>(`/pipelines/${pipelineId}/stages`, { method: 'POST', body: JSON.stringify(payload) }, token)
 }
+
+export async function updateStage(
+  pipelineId: string,
+  stageId: string,
+  updates: { name?: string; color?: string },
+  token: string,
+): Promise<Stage> {
+  return apiFetch<Stage>(`/pipelines/${pipelineId}/stages/${stageId}`, { method: 'PATCH', body: JSON.stringify(updates) }, token)
+}
+
+export async function reorderStages(
+  pipelineId: string,
+  order: Array<{ stageId: string; order: number }>,
+  token: string,
+): Promise<void> {
+  return apiFetch<void>(`/pipelines/${pipelineId}/stages/reorder`, { method: 'PATCH', body: JSON.stringify({ order }) }, token)
+}

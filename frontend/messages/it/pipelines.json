@@ -33,6 +33,16 @@
       "creating": "Creazione...",
       "cancel": "Annulla",
       "errorGeneric": "Errore nella creazione della fase. Riprova."
-    }
+    },
+    "editStageModal": {
+      "title": "Modifica Fase",
+      "name": "Nome della fase",
+      "color": "Colore (opzionale)",
+      "save": "Salva",
+      "saving": "Salvataggio...",
+      "cancel": "Annulla",
+      "errorGeneric": "Errore nel salvataggio della fase. Riprova."
+    },
+    "deleteButton": "Elimina"
   }
 }

@@ -36,6 +36,12 @@ describe('Stage entity', () => {
     expect(stage.name).toBe('Updated Name')
   })
 
+  it('recolor() updates color', () => {
+    const stage = Stage.create({ pipelineId: 'pipeline-1', name: 'New', order: 1, color: '#aaa' })
+    stage.recolor('#ff0000')
+    expect(stage.color).toBe('#ff0000')
+  })
+
   it('reconstitute() restores all fields', () => {
     const id = new UniqueEntityID('stage-xyz')
     const createdAt = new Date('2024-01-01')

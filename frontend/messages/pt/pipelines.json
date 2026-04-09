@@ -33,6 +33,16 @@
       "creating": "Criando...",
       "cancel": "Cancelar",
       "errorGeneric": "Erro ao criar etapa. Tente novamente."
-    }
+    },
+    "editStageModal": {
+      "title": "Editar Etapa",
+      "name": "Nome da etapa",
+      "color": "Cor (opcional)",
+      "save": "Salvar",
+      "saving": "Salvando...",
+      "cancel": "Cancelar",
+      "errorGeneric": "Erro ao salvar etapa. Tente novamente."
+    },
+    "deleteButton": "Excluir"
   }
 }

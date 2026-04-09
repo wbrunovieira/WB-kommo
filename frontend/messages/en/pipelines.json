@@ -33,6 +33,16 @@
       "creating": "Creating...",
       "cancel": "Cancel",
       "errorGeneric": "Error creating stage. Please try again."
-    }
+    },
+    "editStageModal": {
+      "title": "Edit Stage",
+      "name": "Stage name",
+      "color": "Color (optional)",
+      "save": "Save",
+      "saving": "Saving...",
+      "cancel": "Cancel",
+      "errorGeneric": "Error saving stage. Please try again."
+    },
+    "deleteButton": "Delete"
   }
 }

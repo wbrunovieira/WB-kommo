@@ -50,6 +50,11 @@ export class Stage extends Entity<StageProps> {
     this.touch()
   }
 
+  recolor(color: string): void {
+    this.props.color = color
+    this.touch()
+  }
+
   private touch(): void {
     this.props.updatedAt = new Date()
   }
