@@ -209,7 +209,7 @@ export function CreateLeadModal({ pipelines, onClose, onCreated }: Props) {
               type="number"
               value={value}
               onChange={e => setValue(e.target.value)}
-              placeholder="0"
+              placeholder={t('modal.valuePlaceholder')}
               min="0"
               step="0.01"
               style={inputStyle}
