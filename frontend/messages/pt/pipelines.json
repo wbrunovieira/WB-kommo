@@ -1,0 +1,38 @@
+{
+  "pipelines": {
+    "title": "Pipelines",
+    "subtitle": "Gerencie seus pipelines e etapas de vendas",
+    "newPipeline": "Novo Pipeline",
+    "empty": "Nenhum pipeline encontrado",
+    "emptyDesc": "Crie seu primeiro pipeline para organizar seus leads",
+    "loadError": "Erro ao carregar pipelines",
+    "active": "Ativo",
+    "inactive": "Inativo",
+    "stages": "Etapas",
+    "noStages": "Nenhuma etapa",
+    "addStage": "Adicionar etapa",
+    "deleteConfirm": "Tem certeza que deseja excluir este pipeline?",
+    "deleteConfirmDesc": "Esta ação não pode ser desfeita. Leads neste pipeline não serão afetados.",
+    "deleteSuccess": "Pipeline excluído com sucesso",
+    "createModal": {
+      "title": "Novo Pipeline",
+      "name": "Nome do pipeline",
+      "namePlaceholder": "Ex: Vendas B2B",
+      "create": "Criar pipeline",
+      "creating": "Criando...",
+      "cancel": "Cancelar",
+      "errorGeneric": "Erro ao criar pipeline. Tente novamente."
+    },
+    "stageModal": {
+      "title": "Nova Etapa",
+      "name": "Nome da etapa",
+      "namePlaceholder": "Ex: Qualificação",
+      "color": "Cor (opcional)",
+      "colorPlaceholder": "#6c63ff",
+      "create": "Criar etapa",
+      "creating": "Criando...",
+      "cancel": "Cancelar",
+      "errorGeneric": "Erro ao criar etapa. Tente novamente."
+    }
+  }
+}

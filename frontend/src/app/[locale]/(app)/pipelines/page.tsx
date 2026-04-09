@@ -1,0 +1,712 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { useTranslations } from 'next-intl'
+import { getAccessToken } from '@/lib/auth'
+import {
+  getPipelines,
+  createPipeline,
+  deletePipeline,
+  getStages,
+  createStage,
+  Pipeline,
+  Stage,
+} from '@/lib/api'
+
+const inputStyle: React.CSSProperties = {
+  width: '100%',
+  backgroundColor: '#1a1a2e',
+  border: '1px solid #2a2a45',
+  borderRadius: '8px',
+  color: '#e8e8f0',
+  padding: '10px 12px',
+  fontSize: '14px',
+  outline: 'none',
+  boxSizing: 'border-box',
+}
+
+const labelStyle: React.CSSProperties = {
+  display: 'block',
+  fontSize: '12px',
+  fontWeight: 600,
+  color: '#8888aa',
+  textTransform: 'uppercase',
+  letterSpacing: '0.05em',
+  marginBottom: '6px',
+}
+
+export default function PipelinesPage() {
+  const t = useTranslations('pipelines')
+  const [pipelines, setPipelines] = useState<Pipeline[]>([])
+  const [stagesMap, setStagesMap] = useState<Record<string, Stage[]>>({})
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [stageModalPipelineId, setStageModalPipelineId] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Pipeline | null>(null)
+
+  async function load() {
+    const token = getAccessToken()
+    if (!token) return
+    setLoading(true)
+    try {
+      const data = await getPipelines(token)
+      setPipelines(data)
+      // Load stages for all pipelines in parallel
+      const entries = await Promise.all(
+        data.map(async p => {
+          const stages = await getStages(p.id, token).catch(() => [] as Stage[])
+          return [p.id, stages] as [string, Stage[]]
+        }),
+      )
+      setStagesMap(Object.fromEntries(entries))
+    } catch {
+      setError(t('loadError'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleDelete(pipeline: Pipeline) {
+    const token = getAccessToken()
+    if (!token) return
+    await deletePipeline(pipeline.id, token).catch(() => {})
+    setDeleteTarget(null)
+    load()
+  }
+
+  function onStageCreated(pipelineId: string, stage: Stage) {
+    setStagesMap(prev => ({
+      ...prev,
+      [pipelineId]: [...(prev[pipelineId] ?? []), stage],
+    }))
+    setStageModalPipelineId(null)
+  }
+
+  return (
+    <div style={{ maxWidth: '900px', color: '#e8e8f0' }}>
+      {/* Create Pipeline Modal */}
+      {showCreateModal && (
+        <CreatePipelineModal
+          t={t}
+          onClose={() => setShowCreateModal(false)}
+          onCreated={() => { setShowCreateModal(false); load() }}
+        />
+      )}
+
+      {/* Add Stage Modal */}
+      {stageModalPipelineId && (
+        <CreateStageModal
+          t={t}
+          pipelineId={stageModalPipelineId}
+          nextOrder={(stagesMap[stageModalPipelineId]?.length ?? 0) + 1}
+          onClose={() => setStageModalPipelineId(null)}
+          onCreated={stage => onStageCreated(stageModalPipelineId, stage)}
+        />
+      )}
+
+      {/* Delete Confirm Modal */}
+      {deleteTarget && (
+        <DeleteConfirmModal
+          t={t}
+          pipeline={deleteTarget}
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={() => handleDelete(deleteTarget)}
+        />
+      )}
+
+      {/* Header */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: '24px',
+      }}>
+        <div>
+          <h1 style={{ fontSize: '22px', fontWeight: 700, color: '#e8e8f0', margin: 0 }}>
+            {t('title')}
+          </h1>
+          <p style={{ fontSize: '13px', color: '#8888aa', margin: '4px 0 0' }}>
+            {t('subtitle')}
+          </p>
+        </div>
+        <button
+          onClick={() => setShowCreateModal(true)}
+          style={{
+            backgroundColor: '#6c63ff',
+            color: '#fff',
+            border: 'none',
+            borderRadius: '8px',
+            padding: '10px 20px',
+            fontSize: '14px',
+            fontWeight: 600,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+          }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          {t('newPipeline')}
+        </button>
+      </div>
+
+      {/* Content */}
+      {loading ? (
+        <LoadingState />
+      ) : error ? (
+        <ErrorState message={error} />
+      ) : pipelines.length === 0 ? (
+        <EmptyState t={t} onNew={() => setShowCreateModal(true)} />
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {pipelines.map(pipeline => (
+            <PipelineCard
+              key={pipeline.id}
+              pipeline={pipeline}
+              stages={stagesMap[pipeline.id] ?? []}
+              t={t}
+              onAddStage={() => setStageModalPipelineId(pipeline.id)}
+              onDelete={() => setDeleteTarget(pipeline)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Sub-components ──────────────────────────────────────────────────────────
+
+function PipelineCard({
+  pipeline,
+  stages,
+  t,
+  onAddStage,
+  onDelete,
+}: {
+  pipeline: Pipeline
+  stages: Stage[]
+  t: ReturnType<typeof useTranslations<'pipelines'>>
+  onAddStage: () => void
+  onDelete: () => void
+}) {
+  return (
+    <div style={{
+      backgroundColor: '#16213e',
+      borderRadius: '12px',
+      border: '1px solid #2a2a45',
+      padding: '20px',
+    }}>
+      {/* Pipeline header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <p style={{ margin: 0, fontWeight: 700, fontSize: '15px', color: '#e8e8f0' }}>
+            {pipeline.name}
+          </p>
+          <span style={{
+            backgroundColor: pipeline.isActive ? 'rgba(107, 255, 184, 0.15)' : 'rgba(136,136,170,0.15)',
+            color: pipeline.isActive ? '#6bffb8' : '#8888aa',
+            borderRadius: '6px',
+            padding: '2px 8px',
+            fontSize: '11px',
+            fontWeight: 600,
+          }}>
+            {pipeline.isActive ? t('active') : t('inactive')}
+          </span>
+        </div>
+
+        {/* Actions */}
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            onClick={onAddStage}
+            style={{
+              background: 'none',
+              border: '1px solid #2a2a45',
+              borderRadius: '6px',
+              color: '#6c63ff',
+              padding: '5px 12px',
+              fontSize: '12px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+            }}
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            {t('addStage')}
+          </button>
+          <button
+            onClick={onDelete}
+            style={{
+              background: 'none',
+              border: '1px solid rgba(255,107,107,0.3)',
+              borderRadius: '6px',
+              color: '#ff6b6b',
+              padding: '5px 10px',
+              fontSize: '12px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+            }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+              <path d="M10 11v6M14 11v6" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      {/* Stages */}
+      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+        {stages.length === 0 ? (
+          <span style={{ fontSize: '12px', color: '#8888aa' }}>{t('noStages')}</span>
+        ) : (
+          stages
+            .slice()
+            .sort((a, b) => a.order - b.order)
+            .map((stage, idx) => (
+              <div key={stage.id} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                {idx > 0 && (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#2a2a45" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="9 18 15 12 9 6" />
+                  </svg>
+                )}
+                <span style={{
+                  backgroundColor: stage.color ? `${stage.color}22` : 'rgba(108,99,255,0.12)',
+                  color: stage.color ?? '#6c63ff',
+                  borderRadius: '6px',
+                  padding: '4px 10px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  border: `1px solid ${stage.color ? `${stage.color}44` : 'rgba(108,99,255,0.25)'}`,
+                }}>
+                  {stage.name}
+                </span>
+              </div>
+            ))
+        )}
+      </div>
+    </div>
+  )
+}
+
+function CreatePipelineModal({
+  t,
+  onClose,
+  onCreated,
+}: {
+  t: ReturnType<typeof useTranslations<'pipelines'>>
+  onClose: () => void
+  onCreated: () => void
+}) {
+  const [name, setName] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!name.trim()) return
+    const token = getAccessToken()
+    if (!token) return
+    setSubmitting(true)
+    setError('')
+    try {
+      await createPipeline({ name: name.trim() }, token)
+      onCreated()
+    } catch (err: unknown) {
+      const apiErr = err as { title?: string }
+      setError(apiErr?.title ?? t('createModal.errorGeneric'))
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <Backdrop onClick={onClose}>
+      <div style={{
+        backgroundColor: '#16213e',
+        border: '1px solid #2a2a45',
+        borderRadius: '16px',
+        width: '100%',
+        maxWidth: '440px',
+        padding: '28px 32px',
+      }}>
+        <ModalHeader title={t('createModal.title')} onClose={onClose} />
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+          <div>
+            <label style={labelStyle}>{t('createModal.name')} *</label>
+            <input
+              autoFocus
+              type="text"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder={t('createModal.namePlaceholder')}
+              style={inputStyle}
+            />
+          </div>
+          {error && <p style={{ margin: 0, fontSize: '13px', color: '#ff6b6b' }}>{error}</p>}
+          <ModalActions
+            onCancel={onClose}
+            cancelLabel={t('createModal.cancel')}
+            submitLabel={submitting ? t('createModal.creating') : t('createModal.create')}
+            submitting={submitting}
+            disabled={!name.trim() || submitting}
+          />
+        </form>
+      </div>
+    </Backdrop>
+  )
+}
+
+function CreateStageModal({
+  t,
+  pipelineId,
+  nextOrder,
+  onClose,
+  onCreated,
+}: {
+  t: ReturnType<typeof useTranslations<'pipelines'>>
+  pipelineId: string
+  nextOrder: number
+  onClose: () => void
+  onCreated: (stage: Stage) => void
+}) {
+  const [name, setName] = useState('')
+  const [color, setColor] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!name.trim()) return
+    const token = getAccessToken()
+    if (!token) return
+    setSubmitting(true)
+    setError('')
+    try {
+      const stage = await createStage(pipelineId, {
+        name: name.trim(),
+        order: nextOrder,
+        color: color.trim() || undefined,
+      }, token)
+      onCreated(stage)
+    } catch (err: unknown) {
+      const apiErr = err as { title?: string }
+      setError(apiErr?.title ?? t('stageModal.errorGeneric'))
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <Backdrop onClick={onClose}>
+      <div style={{
+        backgroundColor: '#16213e',
+        border: '1px solid #2a2a45',
+        borderRadius: '16px',
+        width: '100%',
+        maxWidth: '440px',
+        padding: '28px 32px',
+      }}>
+        <ModalHeader title={t('stageModal.title')} onClose={onClose} />
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+          <div>
+            <label style={labelStyle}>{t('stageModal.name')} *</label>
+            <input
+              autoFocus
+              type="text"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder={t('stageModal.namePlaceholder')}
+              style={inputStyle}
+            />
+          </div>
+          <div>
+            <label style={labelStyle}>{t('stageModal.color')}</label>
+            <input
+              type="text"
+              value={color}
+              onChange={e => setColor(e.target.value)}
+              placeholder={t('stageModal.colorPlaceholder')}
+              style={inputStyle}
+            />
+          </div>
+          {error && <p style={{ margin: 0, fontSize: '13px', color: '#ff6b6b' }}>{error}</p>}
+          <ModalActions
+            onCancel={onClose}
+            cancelLabel={t('stageModal.cancel')}
+            submitLabel={submitting ? t('stageModal.creating') : t('stageModal.create')}
+            submitting={submitting}
+            disabled={!name.trim() || submitting}
+          />
+        </form>
+      </div>
+    </Backdrop>
+  )
+}
+
+function DeleteConfirmModal({
+  t,
+  pipeline,
+  onCancel,
+  onConfirm,
+}: {
+  t: ReturnType<typeof useTranslations<'pipelines'>>
+  pipeline: Pipeline
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  return (
+    <Backdrop onClick={onCancel}>
+      <div style={{
+        backgroundColor: '#16213e',
+        border: '1px solid #2a2a45',
+        borderRadius: '16px',
+        width: '100%',
+        maxWidth: '420px',
+        padding: '28px 32px',
+      }}>
+        <div style={{ marginBottom: '20px' }}>
+          <h2 style={{ margin: '0 0 8px', fontSize: '17px', fontWeight: 700, color: '#e8e8f0' }}>
+            {t('deleteConfirm')}
+          </h2>
+          <p style={{ margin: 0, fontSize: '13px', color: '#8888aa' }}>
+            <strong style={{ color: '#e8e8f0' }}>{pipeline.name}</strong> — {t('deleteConfirmDesc')}
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+          <button
+            onClick={onCancel}
+            style={{
+              background: 'none',
+              border: '1px solid #2a2a45',
+              borderRadius: '8px',
+              color: '#8888aa',
+              padding: '10px 20px',
+              fontSize: '14px',
+              cursor: 'pointer',
+            }}
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={onConfirm}
+            style={{
+              backgroundColor: '#ff6b6b',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '10px 20px',
+              fontSize: '14px',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            Excluir
+          </button>
+        </div>
+      </div>
+    </Backdrop>
+  )
+}
+
+// ── Shared UI helpers ────────────────────────────────────────────────────────
+
+function Backdrop({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
+  return (
+    <div
+      onClick={e => { if (e.target === e.currentTarget) onClick() }}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000,
+        padding: '16px',
+      }}
+    >
+      {children}
+    </div>
+  )
+}
+
+function ModalHeader({ title, onClose }: { title: string; onClose: () => void }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+      <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#e8e8f0' }}>{title}</h2>
+      <button
+        onClick={onClose}
+        style={{ background: 'none', border: 'none', color: '#8888aa', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center' }}
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18" />
+          <line x1="6" y1="6" x2="18" y2="18" />
+        </svg>
+      </button>
+    </div>
+  )
+}
+
+function ModalActions({
+  onCancel,
+  cancelLabel,
+  submitLabel,
+  submitting,
+  disabled,
+}: {
+  onCancel: () => void
+  cancelLabel: string
+  submitLabel: string
+  submitting: boolean
+  disabled: boolean
+}) {
+  return (
+    <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '4px' }}>
+      <button
+        type="button"
+        onClick={onCancel}
+        style={{
+          background: 'none',
+          border: '1px solid #2a2a45',
+          borderRadius: '8px',
+          color: '#8888aa',
+          padding: '10px 20px',
+          fontSize: '14px',
+          cursor: 'pointer',
+        }}
+      >
+        {cancelLabel}
+      </button>
+      <button
+        type="submit"
+        disabled={disabled}
+        style={{
+          backgroundColor: disabled ? '#2a2a45' : '#6c63ff',
+          color: disabled ? '#8888aa' : '#fff',
+          border: 'none',
+          borderRadius: '8px',
+          padding: '10px 24px',
+          fontSize: '14px',
+          fontWeight: 600,
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+        }}
+      >
+        {submitting && (
+          <span style={{
+            width: '14px', height: '14px', border: '2px solid rgba(255,255,255,0.3)',
+            borderTopColor: '#fff', borderRadius: '50%',
+            animation: 'spin 0.7s linear infinite', display: 'inline-block',
+          }} />
+        )}
+        {submitLabel}
+      </button>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  )
+}
+
+function LoadingState() {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      {[1, 2, 3].map(i => (
+        <div key={i} style={{
+          backgroundColor: '#16213e',
+          borderRadius: '12px',
+          border: '1px solid #2a2a45',
+          padding: '20px',
+          height: '80px',
+          opacity: 0.5,
+        }} />
+      ))}
+    </div>
+  )
+}
+
+function ErrorState({ message }: { message: string }) {
+  return (
+    <div style={{
+      backgroundColor: 'rgba(255, 107, 107, 0.1)',
+      border: '1px solid rgba(255, 107, 107, 0.3)',
+      borderRadius: '12px',
+      padding: '24px',
+      textAlign: 'center',
+      color: '#ff6b6b',
+      fontSize: '14px',
+    }}>
+      {message}
+    </div>
+  )
+}
+
+function EmptyState({
+  t,
+  onNew,
+}: {
+  t: ReturnType<typeof useTranslations<'pipelines'>>
+  onNew: () => void
+}) {
+  return (
+    <div style={{
+      padding: '48px 40px',
+      backgroundColor: '#16213e',
+      borderRadius: '16px',
+      border: '1px dashed #2a2a45',
+      textAlign: 'center',
+      color: '#8888aa',
+    }}>
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ marginBottom: '16px', opacity: 0.4 }}>
+        <rect x="3" y="3" width="18" height="4" rx="1" />
+        <rect x="3" y="10" width="18" height="4" rx="1" />
+        <rect x="3" y="17" width="18" height="4" rx="1" />
+      </svg>
+      <p style={{ margin: '0 0 6px', fontSize: '15px', fontWeight: 600, color: '#e8e8f0' }}>
+        {t('empty')}
+      </p>
+      <p style={{ margin: '0 0 20px', fontSize: '13px' }}>
+        {t('emptyDesc')}
+      </p>
+      <button
+        onClick={onNew}
+        style={{
+          backgroundColor: '#6c63ff',
+          color: '#fff',
+          border: 'none',
+          borderRadius: '8px',
+          padding: '10px 24px',
+          fontSize: '14px',
+          fontWeight: 600,
+          cursor: 'pointer',
+        }}
+      >
+        {t('newPipeline')}
+      </button>
+    </div>
+  )
+}

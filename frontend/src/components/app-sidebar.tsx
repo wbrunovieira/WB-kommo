@@ -28,6 +28,12 @@ export function AppSidebar({ user, onLogout }: Props) {
       icon: <LeadsIcon />,
       label: t('leads'),
     },
+    {
+      key: 'pipelines',
+      href: '/pipelines' as const,
+      icon: <PipelinesIcon />,
+      label: t('pipelines'),
+    },
   ]
 
   return (
@@ -175,6 +181,16 @@ function LeadsIcon() {
       <circle cx="9" cy="7" r="4" />
       <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
       <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  )
+}
+
+function PipelinesIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="18" height="4" rx="1" />
+      <rect x="3" y="10" width="18" height="4" rx="1" />
+      <rect x="3" y="17" width="18" height="4" rx="1" />
     </svg>
   )
 }

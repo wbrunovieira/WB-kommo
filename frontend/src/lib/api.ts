@@ -213,6 +213,28 @@ export async function getPipelines(token: string): Promise<Pipeline[]> {
   return apiFetch<Pipeline[]>('/pipelines', { method: 'GET' }, token)
 }
 
+export async function createPipeline(payload: { name: string }, token: string): Promise<Pipeline> {
+  return apiFetch<Pipeline>('/pipelines', { method: 'POST', body: JSON.stringify(payload) }, token)
+}
+
+export async function updatePipeline(id: string, updates: { name?: string; isActive?: boolean }, token: string): Promise<Pipeline> {
+  return apiFetch<Pipeline>(`/pipelines/${id}`, { method: 'PATCH', body: JSON.stringify(updates) }, token)
+}
+
+export async function deletePipeline(id: string, token: string): Promise<void> {
+  return apiFetch<void>(`/pipelines/${id}`, { method: 'DELETE' }, token)
+}
+
 export async function getStages(pipelineId: string, token: string): Promise<Stage[]> {
   return apiFetch<Stage[]>(`/pipelines/${pipelineId}/stages`, { method: 'GET' }, token)
+}
+
+export interface CreateStagePayload {
+  name: string
+  order?: number
+  color?: string
+}
+
+export async function createStage(pipelineId: string, payload: CreateStagePayload, token: string): Promise<Stage> {
+  return apiFetch<Stage>(`/pipelines/${pipelineId}/stages`, { method: 'POST', body: JSON.stringify(payload) }, token)
 }

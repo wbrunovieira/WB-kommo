@@ -1,0 +1,38 @@
+{
+  "pipelines": {
+    "title": "Pipelines",
+    "subtitle": "Manage your sales pipelines and stages",
+    "newPipeline": "New Pipeline",
+    "empty": "No pipelines found",
+    "emptyDesc": "Create your first pipeline to organize your leads",
+    "loadError": "Error loading pipelines",
+    "active": "Active",
+    "inactive": "Inactive",
+    "stages": "Stages",
+    "noStages": "No stages",
+    "addStage": "Add stage",
+    "deleteConfirm": "Are you sure you want to delete this pipeline?",
+    "deleteConfirmDesc": "This action cannot be undone. Leads in this pipeline will not be affected.",
+    "deleteSuccess": "Pipeline deleted successfully",
+    "createModal": {
+      "title": "New Pipeline",
+      "name": "Pipeline name",
+      "namePlaceholder": "E.g.: B2B Sales",
+      "create": "Create pipeline",
+      "creating": "Creating...",
+      "cancel": "Cancel",
+      "errorGeneric": "Error creating pipeline. Please try again."
+    },
+    "stageModal": {
+      "title": "New Stage",
+      "name": "Stage name",
+      "namePlaceholder": "E.g.: Qualification",
+      "color": "Color (optional)",
+      "colorPlaceholder": "#6c63ff",
+      "create": "Create stage",
+      "creating": "Creating...",
+      "cancel": "Cancel",
+      "errorGeneric": "Error creating stage. Please try again."
+    }
+  }
+}
