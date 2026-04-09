@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { getUser, getAccessToken } from '@/lib/auth'
 import { getLeads, getPipelines, Lead, Pipeline } from '@/lib/api'
+import { CreateLeadModal } from '@/components/create-lead-modal'
 
 const selectStyle: React.CSSProperties = {
   backgroundColor: '#1a1a2e',
@@ -30,6 +31,7 @@ export default function LeadsPage() {
   const [error, setError] = useState('')
   const [filterPipeline, setFilterPipeline] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
+  const [showModal, setShowModal] = useState(false)
   const user = getUser()
 
   useEffect(() => {
@@ -54,8 +56,24 @@ export default function LeadsPage() {
       })
   }, [filterPipeline, filterStatus, t])
 
+  function refreshLeads() {
+    const token = getAccessToken()
+    if (!token) return
+    getLeads(token, {
+      pipelineId: filterPipeline || undefined,
+      status: filterStatus || undefined,
+    }).then(setLeads).catch(() => {})
+  }
+
   return (
     <div style={{ maxWidth: '1000px', color: '#e8e8f0' }}>
+      {showModal && (
+        <CreateLeadModal
+          pipelines={pipelines}
+          onClose={() => setShowModal(false)}
+          onCreated={() => { setShowModal(false); refreshLeads() }}
+        />
+      )}
       {/* Page header */}
       <div style={{
         display: 'flex',
@@ -74,19 +92,21 @@ export default function LeadsPage() {
 
         {/* New lead button — visible to ACCOUNT_ADMIN and MEMBER */}
         {(user?.role === 'ACCOUNT_ADMIN' || user?.role === 'MEMBER') && (
-          <button style={{
-            backgroundColor: '#6c63ff',
-            color: '#fff',
-            border: 'none',
-            borderRadius: '8px',
-            padding: '10px 20px',
-            fontSize: '14px',
-            fontWeight: 600,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-          }}>
+          <button
+            onClick={() => setShowModal(true)}
+            style={{
+              backgroundColor: '#6c63ff',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '10px 20px',
+              fontSize: '14px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <line x1="12" y1="5" x2="12" y2="19" />
               <line x1="5" y1="12" x2="19" y2="12" />

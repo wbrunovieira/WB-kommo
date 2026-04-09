@@ -8,14 +8,25 @@
     "empty": "Nessun lead trovato",
     "emptyDesc": "Crea il tuo primo lead per iniziare",
     "loadError": "Errore nel caricamento dei lead",
-    "status": {
-      "OPEN": "Aperto",
-      "WON": "Vinto",
-      "LOST": "Perso"
-    },
+    "status": { "OPEN": "Aperto", "WON": "Vinto", "LOST": "Perso" },
     "value": "Valore",
     "pipeline": "Pipeline",
     "noValue": "Nessun valore",
-    "createdAt": "Creato il"
+    "createdAt": "Creato il",
+    "modal": {
+      "title": "Nuovo Lead",
+      "name": "Nome del lead",
+      "namePlaceholder": "Es. Acme Corp - Nuova opportunità",
+      "pipeline": "Pipeline",
+      "stage": "Fase",
+      "value": "Valore",
+      "create": "Crea lead",
+      "creating": "Creazione...",
+      "cancel": "Annulla",
+      "noPipelines": "Nessuna pipeline disponibile. Crea prima una pipeline.",
+      "loadingStages": "Caricamento fasi...",
+      "selectPipelineFirst": "Seleziona prima una pipeline",
+      "errorGeneric": "Errore nella creazione del lead. Riprova."
+    }
   }
 }

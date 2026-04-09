@@ -8,14 +8,25 @@
     "empty": "No leads found",
     "emptyDesc": "Create your first lead to get started",
     "loadError": "Error loading leads",
-    "status": {
-      "OPEN": "Open",
-      "WON": "Won",
-      "LOST": "Lost"
-    },
+    "status": { "OPEN": "Open", "WON": "Won", "LOST": "Lost" },
     "value": "Value",
     "pipeline": "Pipeline",
     "noValue": "No value",
-    "createdAt": "Created at"
+    "createdAt": "Created at",
+    "modal": {
+      "title": "New Lead",
+      "name": "Lead name",
+      "namePlaceholder": "e.g. Acme Corp - New opportunity",
+      "pipeline": "Pipeline",
+      "stage": "Stage",
+      "value": "Value",
+      "create": "Create lead",
+      "creating": "Creating...",
+      "cancel": "Cancel",
+      "noPipelines": "No pipelines available. Create a pipeline first.",
+      "loadingStages": "Loading stages...",
+      "selectPipelineFirst": "Select a pipeline first",
+      "errorGeneric": "Error creating lead. Please try again."
+    }
   }
 }
