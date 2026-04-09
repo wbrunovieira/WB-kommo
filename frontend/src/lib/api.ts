@@ -66,6 +66,16 @@ async function apiFetch<T>(path: string, init: RequestInit, accessToken: string)
     },
     credentials: 'include',
   })
+
+  if (res.status === 401) {
+    // Token expired or invalid — clear session and redirect to login
+    if (typeof window !== 'undefined') {
+      localStorage.clear()
+      window.location.href = '/login'
+    }
+    throw { title: 'Unauthorized', status: 401, detail: 'Session expired.' } as ApiError
+  }
+
   if (!res.ok) {
     const err: ApiError = await res.json().catch(() => ({
       title: 'Unexpected error',
