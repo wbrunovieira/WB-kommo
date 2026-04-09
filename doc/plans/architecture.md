@@ -1,10 +1,10 @@
 # WB-Kommo — CRM SaaS: Documento de Arquitetura
 
-> Versão 1.8 — 2026-04-08
+> Versão 1.10 — 2026-04-09
 
 ---
 
-> **Estado atual de implementação — 2026-04-08**
+> **Estado atual de implementação — 2026-04-09**
 >
 > | Camada | Status |
 > |--------|--------|
@@ -16,18 +16,30 @@
 > | Refresh Token em httpOnly cookie (`wb_refresh_token`) | ✅ Implementado |
 > | Workspace slug no login (`ITenantRepository.findBySlug`) | ✅ Implementado |
 > | Seed automático na inicialização (`SeedService`) | ✅ Implementado |
-> | Swagger — rotas de auth documentadas | ✅ Implementado |
 > | GlobalExceptionFilter (RFC 7807) | ✅ Implementado |
-> | Testes — 161 passando (133 unit + 13 integration + 15 E2E) | ✅ Implementado |
 > | Docker dev + Docker testes isolados | ✅ Implementado |
 > | TypeScript sem erros (`esModuleInterop`, `tsc --noEmit` limpo) | ✅ Implementado |
 > | Frontend — Login + Dashboard (Next.js 15 App Router) | ✅ Implementado |
 > | Frontend — i18n next-intl (pt, en, it, es) com cookie de preferência | ✅ Implementado |
 > | Frontend — Workspace lembrado no localStorage | ✅ Implementado |
-> | Logging estruturado (nestjs-pino) | 📋 Planejado (Fase 4) |
 > | PLATFORM_OWNER role + resellerTenantId + impersonation ownership | ✅ Implementado |
-| Dashboard: TenantListSection + CreateClientSection + ImpersonationBanner | ✅ Implementado |
-| Módulos CRM (leads, pipelines, activities) | ⬜ Não iniciado |
+> | Dashboard: TenantListSection + CreateClientSection + ImpersonationBanner | ✅ Implementado |
+> | **Tenants module** — GET/POST `/tenants` + Swagger | ✅ Implementado |
+> | **Pipelines module** — CRUD pipelines + stages, reorder, Swagger | ✅ Implementado |
+> | **Leads module** — CRUD + soft-delete + restore + filtros + Swagger | ✅ Implementado |
+> | **Lead Field Configs** — campos customizados, reorder, Swagger | ✅ Implementado |
+> | **AGENT role** — 5º nível da hierarquia, acesso restrito a leads | ✅ Implementado |
+> | **Workspace users** — GET/POST/PATCH/DELETE `/workspace/users` + Swagger | ✅ Implementado |
+> | **Swagger** — todas as rotas documentadas com `@ApiBody`/`@ApiQuery`/`@ApiParam` | ✅ Implementado |
+> | **Frontend — Sidebar** com nav filtrada por role (AGENT vê só Leads) | ✅ Implementado |
+> | **Frontend — Pipelines page** (CRUD de pipelines e stages) | ✅ Implementado |
+> | **Frontend — Settings page** (lead field configs, reorder, active toggle) | ✅ Implementado |
+> | **Frontend — Leads page** kanban + lista, drag & drop, filtros | ✅ Implementado |
+> | **Frontend — Lead detail modal** (clique no card/linha) | ✅ Implementado |
+> | **Frontend — Lead edit/delete modals** + troca de etapa na lista | ✅ Implementado |
+> | **Frontend — Users page** (CRUD de usuários do workspace, confirm password, soft-delete) | ✅ Implementado |
+> | Logging estruturado (nestjs-pino) | 📋 Planejado (Fase 4) |
+> | Módulo Activities + Contacts | ⬜ Não iniciado |
 
 ---
 
@@ -42,7 +54,10 @@ Sistema CRM SaaS para gestão de leads, inspirado no Kommo. O modelo de negócio
 | **Platform Owner** | `PLATFORM_OWNER` | Dono da plataforma. Gerencia resellers, monitora toda a operação. **Acessa o CRM exclusivamente via impersonação** — nunca opera leads diretamente para não criar dependência com os times de vendas dos clientes. |
 | **Reseller** | `RESELLER` | Parceiro que revende assinaturas e presta suporte. Gerencia seus clientes (tenants) e pode impersonar qualquer um deles. **Acessa o CRM dos clientes via impersonação** — todas as ações ficam registradas no AuditLog com `impersonated: true`, deixando rastreável quem fez o quê. |
 | **Admin de Conta** | `ACCOUNT_ADMIN` | Administrador do workspace de um cliente. Gerencia usuários, pipelines, configurações e tem visão total dos leads da conta. Único que pode soft-deletar leads. |
-| **Membro (Vendedor)** | `MEMBER` | Vendedor da equipe. Cria e edita leads. Por padrão vê apenas seus próprios leads — visão global liberada pelo admin via permissão granular `canViewAllLeads`. **Não pode deletar leads** (nem soft-delete). |
+| **Membro (Vendedor)** | `MEMBER` | Vendedor da equipe. Cria e edita leads. Por padrão vê apenas seus próprios leads — visão global liberada pelo admin via permissão granular `canViewAllLeads`. **Não pode deletar leads** (nem soft-delete). Pode criar e gerenciar usuários dentro do próprio workspace. |
+| **Agente** | `AGENT` | Vendedor/secretária com acesso restrito. Só acessa a área de leads — sem acesso a pipelines, configurações, usuários ou qualquer gestão de conta. Não pode listar, criar, editar ou remover usuários. |
+
+**Hierarquia de roles:** `PLATFORM_OWNER > RESELLER > ACCOUNT_ADMIN > MEMBER > AGENT`
 
 ---
 
@@ -419,31 +434,34 @@ class UserSession extends Entity<UserSessionProps> {
 ```typescript
 // Centraliza todas as regras de permissão
 class UserRole {
-  private readonly value: 'PLATFORM_OWNER' | 'RESELLER' | 'ACCOUNT_ADMIN' | 'MEMBER'
+  private readonly value: 'PLATFORM_OWNER' | 'RESELLER' | 'ACCOUNT_ADMIN' | 'MEMBER' | 'AGENT'
 
   isPlatformOwner(): boolean
   isReseller(): boolean
   isAccountAdmin(): boolean
   isMember(): boolean
+  isAgent(): boolean
   isAdmin(): boolean   // true para PLATFORM_OWNER | RESELLER | ACCOUNT_ADMIN
 
   // Acesso ao CRM — PLATFORM_OWNER e RESELLER só via impersonação
-  canAccessCrmDirectly(): boolean   // apenas ACCOUNT_ADMIN | MEMBER
+  canAccessCrmDirectly(): boolean   // ACCOUNT_ADMIN | MEMBER | AGENT
   canImpersonate(): boolean         // PLATFORM_OWNER | RESELLER
 
   // Gestão de tenants
   canSeeAllTenants(): boolean       // apenas PLATFORM_OWNER
   canManageOwnClients(): boolean    // PLATFORM_OWNER | RESELLER
 
-  // Gestão de usuários — RESELLER cria em qualquer tenant, ACCOUNT_ADMIN cria no próprio tenant
-  canCreateUsers(): boolean         // PLATFORM_OWNER | RESELLER | ACCOUNT_ADMIN
-  canUpdateUsers(): boolean         // PLATFORM_OWNER | RESELLER | ACCOUNT_ADMIN
-  canDeleteUsers(): boolean         // PLATFORM_OWNER | RESELLER | ACCOUNT_ADMIN
-  canListUsers(): boolean           // PLATFORM_OWNER | RESELLER | ACCOUNT_ADMIN
+  // Gestão de usuários
+  // MEMBER pode criar/listar/editar/deletar usuários no próprio workspace
+  // AGENT não pode fazer nada com usuários
+  canCreateUsers(): boolean         // PLATFORM_OWNER | RESELLER | ACCOUNT_ADMIN | MEMBER
+  canUpdateUsers(): boolean         // PLATFORM_OWNER | RESELLER | ACCOUNT_ADMIN | MEMBER
+  canDeleteUsers(): boolean         // PLATFORM_OWNER | RESELLER | ACCOUNT_ADMIN | MEMBER
+  canListUsers(): boolean           // PLATFORM_OWNER | RESELLER | ACCOUNT_ADMIN | MEMBER
 
   // CRM — leads
-  canCreateLeads(): boolean         // ACCOUNT_ADMIN | MEMBER (PLATFORM_OWNER/RESELLER só via impersonação)
-  canSoftDeleteLeads(): boolean     // apenas ACCOUNT_ADMIN
+  canCreateLeads(): boolean         // ACCOUNT_ADMIN | MEMBER | AGENT
+  canSoftDeleteLeads(): boolean     // ACCOUNT_ADMIN | MEMBER | AGENT (soft delete sempre, nunca hard delete)
   canManagePipelines(): boolean     // apenas ACCOUNT_ADMIN
 
   // Admin geral
@@ -455,7 +473,17 @@ class UserRole {
 
 **Regra de escopo na criação de usuários:**
 - `PLATFORM_OWNER` e `RESELLER` podem criar usuários em **qualquer tenant** (onboarding de clientes).
-- `ACCOUNT_ADMIN` só pode criar usuários **dentro do próprio tenant** — enforcement via `TenantGuard`.
+- `ACCOUNT_ADMIN` e `MEMBER` só podem criar usuários **dentro do próprio tenant** — enforcement no `WorkspaceController`.
+- `AGENT` não pode criar, listar, editar ou remover usuários.
+
+**Sidebar no frontend — itens visíveis por role:**
+
+| Item de nav | ACCOUNT_ADMIN / MEMBER | AGENT |
+|-------------|----------------------|-------|
+| Leads | ✅ | ✅ |
+| Pipelines | ✅ | ❌ |
+| Configurações | ✅ | ❌ |
+| Usuários | ✅ | ❌ |
 
 **Permissões granulares em `UserAuthorization.permissions[]`** (complementam o role):
 
@@ -614,20 +642,22 @@ Adotamos a filosofia do "se responsável" como padrão para MEMBER, mas via role
 
 #### Matriz de permissões do CRM
 
-| Ação | PLATFORM_OWNER | RESELLER | ACCOUNT_ADMIN | MEMBER |
-|------|---------------|----------|---------------|--------|
-| Acessar CRM diretamente | ❌ | ❌ | ✅ | ✅ |
-| Acessar CRM via impersonação | ✅ | ✅ | — | — |
-| Ver todos os leads da conta | via imp. | via imp. | ✅ | ⚙️ `canViewAllLeads` |
-| Ver apenas próprios leads | via imp. | via imp. | ✅ | ✅ (padrão) |
-| Criar lead | via imp. | via imp. | ✅ | ✅ |
-| Editar qualquer lead | via imp. | via imp. | ✅ | ⚙️ `canEditAllLeads` |
-| Editar apenas próprios leads | via imp. | via imp. | ✅ | ✅ (padrão) |
-| **Soft-delete lead** | ❌ | ❌ | ✅ | ❌ |
-| Restaurar lead deletado | ❌ | ❌ | ✅ | ❌ |
-| Ver leads deletados (arquivo) | via imp. | via imp. | ✅ | ❌ |
-| Gerenciar pipelines e stages | via imp. | via imp. | ✅ | ❌ |
-| Exportar dados | via imp. | via imp. | ✅ | ❌ |
+| Ação | PLATFORM_OWNER | RESELLER | ACCOUNT_ADMIN | MEMBER | AGENT |
+|------|---------------|----------|---------------|--------|-------|
+| Acessar CRM diretamente | ❌ | ❌ | ✅ | ✅ | ✅ |
+| Acessar CRM via impersonação | ✅ | ✅ | — | — | — |
+| Ver todos os leads da conta | via imp. | via imp. | ✅ | ⚙️ `canViewAllLeads` | ⚙️ |
+| Ver apenas próprios leads | via imp. | via imp. | ✅ | ✅ (padrão) | ✅ (padrão) |
+| Criar lead | via imp. | via imp. | ✅ | ✅ | ✅ |
+| Editar qualquer lead | via imp. | via imp. | ✅ | ⚙️ `canEditAllLeads` | ⚙️ |
+| Editar apenas próprios leads | via imp. | via imp. | ✅ | ✅ (padrão) | ✅ (padrão) |
+| **Soft-delete lead** | ❌ | ❌ | ✅ | ✅ | ✅ |
+| Restaurar lead deletado | ❌ | ❌ | ✅ | ❌ | ❌ |
+| Ver leads deletados (arquivo) | via imp. | via imp. | ✅ | ❌ | ❌ |
+| Gerenciar pipelines e stages | via imp. | via imp. | ✅ | ❌ | ❌ |
+| Gerenciar configurações (field configs) | via imp. | via imp. | ✅ | ❌ | ❌ |
+| Gerenciar usuários do workspace | via imp. | via imp. | ✅ | ✅ | ❌ |
+| Exportar dados | via imp. | via imp. | ✅ | ❌ | ❌ |
 
 #### Política de Soft-Delete em Leads
 
@@ -976,18 +1006,46 @@ model UserSession {
 }
 
 model Tenant {
-  id          String   @id @default(uuid())
-  name        String
-  slug        String   @unique
-  planId      String
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  plan        Plan     @relation(fields: [planId], references: [id])
-  identities  UserIdentity[]
-  profiles    UserProfile[]
-  authorizations UserAuthorization[]
-  leads       Lead[]
-  pipelines   Pipeline[]
+  id                String   @id @default(uuid())
+  name              String
+  slug              String   @unique
+  planId            String
+  resellerTenantId  String?   // null para resellers; aponta para o reseller dono da conta
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  plan              Plan     @relation(fields: [planId], references: [id])
+  identities        UserIdentity[]
+  profiles          UserProfile[]
+  authorizations    UserAuthorization[]
+  leads             Lead[]
+  pipelines         Pipeline[]
+  leadFieldConfigs  LeadFieldConfig[]
+}
+
+model LeadFieldConfig {
+  id         String    @id @default(uuid())
+  tenantId   String
+  label      String
+  type       FieldType
+  isRequired Boolean   @default(false)
+  isActive   Boolean   @default(true)
+  isBuiltIn  Boolean   @default(false)  // campos built-in não podem ser deletados
+  order      Int       @default(0)
+  options    Json      @default("[]")   // para campos do tipo SELECT
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, isActive])
+}
+
+enum FieldType {
+  TEXT
+  NUMBER
+  DATE
+  SELECT
+  BOOLEAN
 }
 
 model Plan {
@@ -1001,19 +1059,20 @@ model Plan {
 }
 
 model Lead {
-  id           String     @id @default(uuid())
-  tenantId     String
-  pipelineId   String
-  stageId      String
-  name         String
-  value        Decimal?
-  status       LeadStatus @default(OPEN)
-  assignedToId String?
-  customFields Json?
-  tags         String[]   @default([])
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-  deletedAt    DateTime?
+  id              String     @id @default(uuid())
+  tenantId        String
+  pipelineId      String
+  stageId         String
+  name            String
+  value           Decimal?
+  status          LeadStatus @default(OPEN)
+  assignedToId    String?
+  customFields    Json?
+  tags            String[]   @default([])
+  deletedByUserId String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  deletedAt       DateTime?
 
   tenant     Tenant     @relation(fields: [tenantId], references: [id])
   pipeline   Pipeline   @relation(fields: [pipelineId], references: [id])
@@ -1024,6 +1083,7 @@ model Lead {
   @@index([tenantId, status])
   @@index([tenantId, pipelineId])
   @@index([tenantId, stageId])
+  @@index([tenantId, deletedAt])
 }
 
 model Pipeline {
@@ -1092,9 +1152,11 @@ model AuditLog {
 }
 
 enum RoleType {
+  PLATFORM_OWNER
   RESELLER
   ACCOUNT_ADMIN
   MEMBER
+  AGENT
 }
 
 enum LeadStatus {
@@ -1646,7 +1708,7 @@ export const routing = defineRouting({
 
 ```typescript
 // src/i18n/request.ts — carrega namespaces e faz merge no nível raiz
-const NAMESPACES = ['common', 'auth', 'dashboard'] as const
+const NAMESPACES = ['common', 'auth', 'dashboard', 'leads', 'pipelines', 'settings', 'users'] as const
 
 export default getRequestConfig(async ({ requestLocale }) => {
   const locale = ...
@@ -1680,13 +1742,23 @@ As chaves dentro de cada arquivo são espalhadas no nível raiz do objeto `messa
 import type commonMessages from '../messages/pt/common.json'
 import type authMessages from '../messages/pt/auth.json'
 import type dashboardMessages from '../messages/pt/dashboard.json'
+import type leadsMessages from '../messages/pt/leads.json'
+import type pipelinesMessages from '../messages/pt/pipelines.json'
+import type settingsMessages from '../messages/pt/settings.json'
+import type usersMessages from '../messages/pt/users.json'
 
 declare module 'next-intl' {
   interface AppConfig {
-    Messages: typeof commonMessages & typeof authMessages & typeof dashboardMessages
+    Messages: typeof commonMessages
+      & typeof authMessages
+      & typeof dashboardMessages
+      & typeof leadsMessages
+      & typeof pipelinesMessages
+      & typeof settingsMessages
+      & typeof usersMessages
   }
 }
-// t('login.nonExistent') → erro de TypeScript em build
+// t('leads.edit.title') → tipado; t('leads.nonExistent') → erro de TypeScript em build
 ```
 
 #### Uso em Server Components e Client Components
@@ -1714,40 +1786,52 @@ const t = useTranslations('dashboard')
 ```
 frontend/src/
 ├── app/
-│   ├── layout.tsx                # ✅ Root transparente (retorna children)
-│   ├── page.tsx                  # ✅ Stub — middleware redireciona
-│   └── [locale]/                 # ✅ Segmento dinâmico de locale
-│       ├── layout.tsx            # ✅ html lang={locale} + NextIntlClientProvider
-│       ├── page.tsx              # ✅ Redireciona → /[locale]/login
-│       ├── login/page.tsx        # ✅ Implementado
-│       ├── dashboard/page.tsx    # ✅ Implementado
-│       ├── (reseller)/           # 📋 Fase 3
-│       │   ├── clients/page.tsx
-│       │   ├── clients/[id]/page.tsx
-│       │   └── layout.tsx
-│       └── (workspace)/          # 📋 Fase 2
-│           ├── leads/page.tsx
-│           ├── pipeline/[id]/page.tsx
-│           ├── contacts/page.tsx
-│           ├── activities/page.tsx
-│           ├── settings/
+│   ├── layout.tsx                         # ✅ Root transparente (retorna children)
+│   ├── page.tsx                           # ✅ Stub — middleware redireciona
+│   └── [locale]/                          # ✅ Segmento dinâmico de locale
+│       ├── layout.tsx                     # ✅ html lang={locale} + NextIntlClientProvider
+│       ├── page.tsx                       # ✅ Redireciona → /[locale]/login
+│       ├── login/page.tsx                 # ✅ Implementado
+│       ├── dashboard/page.tsx             # ✅ TenantList + CreateClient + ImpersonationBanner
+│       ├── (app)/                         # ✅ Grupo de rotas protegidas com sidebar
+│       │   ├── layout.tsx                 # ✅ AppSidebar + conteúdo — nav filtrada por role
+│       │   ├── leads/page.tsx             # ✅ Kanban + lista, drag&drop, detail/edit/delete modals
+│       │   ├── pipelines/page.tsx         # ✅ CRUD de pipelines e stages
+│       │   ├── settings/page.tsx          # ✅ Lead field configs (campos customizados)
+│       │   └── users/page.tsx             # ✅ Gestão de usuários do workspace
+│       └── (reseller)/                    # 📋 Fase 3
+│           ├── clients/page.tsx
+│           ├── clients/[id]/page.tsx
 │           └── layout.tsx
 ├── i18n/
-│   ├── routing.ts                # ✅ locales, defaultLocale, localeCookie
-│   ├── request.ts                # ✅ namespace merge dinâmico
-│   └── navigation.ts             # ✅ Link/redirect/useRouter tipados
+│   ├── routing.ts                         # ✅ locales, defaultLocale, localeCookie
+│   ├── request.ts                         # ✅ namespace merge dinâmico
+│   └── navigation.ts                      # ✅ Link/redirect/useRouter tipados
 ├── components/
-│   ├── login-form.tsx            # ✅ workspace lembrado, spinner durante nav
-│   ├── language-switcher.tsx     # ✅ botões PT/EN/IT/ES
-│   └── (kanban/, lead/, shared/ — Fase 2)
+│   ├── login-form.tsx                     # ✅ workspace lembrado, spinner durante nav
+│   ├── language-switcher.tsx              # ✅ botões PT/EN/IT/ES
+│   ├── app-sidebar.tsx                    # ✅ sidebar com nav por role (AGENT vê só leads)
+│   └── create-lead-modal.tsx              # ✅ modal de criação de lead
 ├── lib/
-│   ├── api.ts                    # ✅ fetch com credentials: 'include'
-│   └── auth.ts                   # ✅ localStorage: accessToken + user
-├── global.d.ts                   # ✅ AppConfig.Messages type augmentation
-├── middleware.ts                  # ✅ locale detection + redirect
+│   ├── api.ts                             # ✅ fetch com credentials: 'include' + todos os endpoints
+│   └── auth.ts                            # ✅ localStorage: accessToken + user
+├── global.d.ts                            # ✅ AppConfig.Messages (todos os namespaces registrados)
+├── middleware.ts                           # ✅ locale detection + redirect
 └── styles/
-    └── globals.css               # ✅ CSS variables dark theme
+    └── globals.css                        # ✅ CSS variables dark theme
 ```
+
+**Namespaces i18n registrados** em `i18n/request.ts`:
+
+| Namespace | Página |
+|-----------|--------|
+| `common` | Compartilhado (nav, roles, actions) |
+| `auth` | Login |
+| `dashboard` | Dashboard |
+| `leads` | Página de leads (kanban, lista, modais) |
+| `pipelines` | Página de pipelines |
+| `settings` | Página de configurações |
+| `users` | Página de usuários do workspace |
 
 ### 7.3 Impersonation no Frontend
 
@@ -1799,16 +1883,16 @@ ACCOUNT_ADMIN → POST /users
   → Grava AuditLog
 ```
 
-**Rotas de gestão de usuários:**
+**Rotas de gestão de usuários (implementadas em `WorkspaceController`):**
 
 | Método | Rota | Guard | Descrição |
 |--------|------|-------|-----------|
-| `POST` | `/tenants/:tenantId/users` | `RESELLER` | Reseller cria usuário em qualquer tenant |
-| `POST` | `/users` | `RESELLER \| ACCOUNT_ADMIN` | Cria usuário no próprio tenant |
-| `GET` | `/users` | `RESELLER \| ACCOUNT_ADMIN` | Lista usuários do tenant |
-| `GET` | `/users/:id` | `RESELLER \| ACCOUNT_ADMIN` | Detalhes de um usuário |
-| `PATCH` | `/users/:id` | `RESELLER \| ACCOUNT_ADMIN` | Atualiza perfil/role |
-| `DELETE` | `/users/:id` | `RESELLER \| ACCOUNT_ADMIN` | Desativa usuário (soft delete) |
+| `GET` | `/workspace/users` | `MEMBER+` (exceto AGENT) | Lista usuários ativos do workspace |
+| `POST` | `/workspace/users` | `MEMBER+` (exceto AGENT) | Cria usuário; MEMBER limitado ao próprio tenant |
+| `PATCH` | `/workspace/users/:identityId` | `MEMBER+` (exceto AGENT) | Atualiza nome, timezone, language, role |
+| `DELETE` | `/workspace/users/:identityId` | `MEMBER+` (exceto AGENT) | Soft-delete; não permite auto-exclusão |
+
+> **Soft-delete de usuário:** seta `deletedAt` em `UserIdentity` e `UserProfile`. Os dados são preservados para auditoria — o usuário desaparece das listagens normais mas todas as suas ações históricas (leads, audit log) continuam rastreáveis.
 
 ### 8.3 Gestão de Leads
 ```
@@ -1898,17 +1982,22 @@ Reseller → POST /auth/impersonate/:tenantId
 - [x] Workspace lembrado em localStorage — pré-preenchido com badge "Lembrado / Alterar"
 
 ### Fase 2 — Core CRM (Semanas 4-7)
-- [ ] Módulo Leads + Pipelines + Stages (TDD — entity → use cases → HTTP → e2e)
-  - Lead entity com soft-delete (`deletedAt`, `deletedByUserId`)
-  - `CreateLeadUseCase` — valida limites do plano via `PlanLimitService`
-  - `SoftDeleteLeadUseCase` — apenas ACCOUNT_ADMIN
-  - `ListLeadsUseCase` — escopo por role: MEMBER vê só seus leads (padrão) ou todos (`canViewAllLeads`)
-  - Guard `LeadScopeGuard` — injeta filtro `assignedTo` para MEMBER sem `canViewAllLeads`
-  - Pipeline + Stage CRUD (apenas ACCOUNT_ADMIN)
+- [x] **Módulo Pipelines + Stages** — CRUD completo, reorder, `PipelinesController` com Swagger
+- [x] **Módulo Leads** — entity com soft-delete, `CreateLeadUseCase`, `ListLeadsUseCase`, `UpdateLeadUseCase`, `SoftDeleteLeadUseCase`, `RestoreLeadUseCase`, `GetLeadUseCase`
+- [x] **Lead Field Configs** — campos customizados por tenant, `LeadFieldConfig` entity, CRUD + reorder + active toggle
+- [x] **AGENT role** — 5º nível na hierarquia; acesso restrito a leads, sem acesso a users/pipelines/settings
+- [x] **Workspace Users Management** — `ListWorkspaceUsersUseCase`, `UpdateWorkspaceUserUseCase`, `SoftDeleteWorkspaceUserUseCase`, `WorkspaceController`
+- [x] **Swagger completo** — todas as rotas documentadas com `@ApiBody`, `@ApiQuery`, `@ApiParam`, descriptions e status codes
+- [x] **Frontend — Sidebar** com `app-sidebar.tsx`, nav filtrada por role
+- [x] **Frontend — Leads page** — kanban + lista, drag & drop (`@dnd-kit`), filtros por pipeline/status, `CreateLeadModal`
+- [x] **Frontend — Lead detail modal** — abre ao clicar no card/linha (click vs drag: threshold 5px)
+- [x] **Frontend — Lead edit/delete** — `EditLeadModal`, `DeleteConfirmModal`, troca de etapa inline na lista, optimistic updates
+- [x] **Frontend — Pipelines page** — CRUD completo de pipelines e stages
+- [x] **Frontend — Settings page** — gerenciamento de lead field configs, reorder, active toggle
+- [x] **Frontend — Users page** — tabela de usuários, criar (confirm password + eye toggle), editar, soft-delete (botão oculto na própria linha)
 - [ ] Módulo Activities + Contacts
-- [ ] Kanban board com drag & drop (frontend)
 - [ ] Lead detail slide-over com timeline de AuditLog
-- [ ] Filtros e busca (Criteria Pattern nos leads)
+- [ ] Filtros e busca avançados (Criteria Pattern nos leads)
 - [ ] Testes unitários + integração + e2e do core CRM
 
 ### Fase 3 — SaaS Features (Semanas 8-11)
@@ -1925,7 +2014,7 @@ Reseller → POST /auth/impersonate/:tenantId
 - [ ] Animações e UX refinados (Framer Motion)
 - [ ] Performance (query optimization, caching Redis)
 - [ ] Logs estruturados + health checks (`nestjs-pino` + `pino-pretty` — stack decidida, correlation ID por request, contexto tenantId/userId)
-- [x] Documentação da API (Swagger/OpenAPI) — auth routes ✅ (demais módulos ao implementar)
+- [x] Documentação da API (Swagger/OpenAPI) — todas as rotas documentadas ✅
 - [ ] CI/CD básico
 - [ ] Cobertura de testes ≥ 85%
 
@@ -1936,3 +2025,5 @@ Reseller → POST /auth/impersonate/:tenantId
 *Versão 1.8 — atualizado em 2026-04-08: frontend Next.js 15 implementado (login + dashboard); i18n next-intl v4 com pt/en/it/es, detecção de browser, cookie de preferência e mensagens split por namespace; Refresh Token movido para httpOnly cookie; login aceita workspace slug; SeedService automático na inicialização; `esModuleInterop` adicionado ao tsconfig; workspace lembrado em localStorage; 161 testes passando.*
 
 *Versão 1.9 — atualizado em 2026-04-09: adicionado PLATFORM_OWNER na hierarquia de roles; `resellerTenantId` no modelo Tenant; política de acesso ao CRM definida (PLATFORM_OWNER e RESELLER apenas via impersonação); matriz de permissões de leads documentada; política de soft-delete obrigatório para leads (MEMBER não pode deletar); permissões granulares `canViewAllLeads` / `canEditAllLeads` para MEMBER; seção 3.13 adicionada com comparação ao modelo Kommo e rastreabilidade de impersonação; migration baseline criada (`prisma migrate dev`).*
+
+*Versão 1.10 — atualizado em 2026-04-09: status de implementação atualizado; AGENT role adicionado (5º nível, acesso restrito a leads); Módulo Pipelines + Stages implementado (CRUD + reorder + Swagger); Módulo Leads implementado (CRUD + soft-delete + restore + field configs + Swagger); WorkspaceController implementado (GET/POST/PATCH/DELETE `/workspace/users`); Swagger completo em todas as rotas (incluindo `@ApiBody`, `@ApiQuery`); Frontend: sidebar com nav por role, leads page (kanban + lista + drag&drop + modais de detail/edit/delete), pipelines page, settings page, users page (confirm password + eye toggle + soft-delete). Fase 2 quase completa — faltam Activities + Contacts e testes E2E do CRM.*
