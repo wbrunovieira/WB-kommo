@@ -13,6 +13,9 @@
     "pipeline": "Pipeline",
     "noValue": "Sem valor",
     "createdAt": "Criado em",
+    "kanbanView": "Kanban",
+    "listView": "Lista",
+    "noStages": "Nenhuma etapa encontrada para este pipeline",
     "modal": {
       "title": "Novo Lead",
       "name": "Nome do lead",
