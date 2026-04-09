@@ -91,7 +91,7 @@ export default function LeadsPage() {
         </div>
 
         {/* New lead button — visible to ACCOUNT_ADMIN and MEMBER */}
-        {(user?.role === 'ACCOUNT_ADMIN' || user?.role === 'MEMBER') && (
+        {(user?.role === 'PLATFORM_OWNER' || user?.role === 'ACCOUNT_ADMIN' || user?.role === 'MEMBER') && (
           <button
             onClick={() => setShowModal(true)}
             style={{
