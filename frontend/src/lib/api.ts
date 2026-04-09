@@ -195,6 +195,21 @@ export async function createWorkspaceUser(payload: RegisterUserPayload, token: s
   }, token)
 }
 
+export async function updateWorkspaceUser(
+  identityId: string,
+  updates: { name?: string; timezone?: string; language?: string; role?: string },
+  token: string,
+): Promise<void> {
+  return apiFetch<void>(`/workspace/users/${identityId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(updates),
+  }, token)
+}
+
+export async function softDeleteWorkspaceUser(identityId: string, token: string): Promise<void> {
+  return apiFetch<void>(`/workspace/users/${identityId}`, { method: 'DELETE' }, token)
+}
+
 // ── Leads ──────────────────────────────────────────────────────────────────────
 
 export interface Lead {

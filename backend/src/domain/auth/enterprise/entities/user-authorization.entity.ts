@@ -80,6 +80,11 @@ export class UserAuthorization extends Entity<UserAuthorizationProps> {
     }
   }
 
+  updateRole(role: UserRole): void {
+    this.props.role = role
+    this.touch()
+  }
+
   private touch(): void {
     this.props.updatedAt = new Date()
   }

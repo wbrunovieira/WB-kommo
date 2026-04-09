@@ -1,10 +1,14 @@
 import {
   Body,
   Controller,
+  Delete,
   ForbiddenException,
   Get,
   HttpCode,
   HttpStatus,
+  NotFoundException,
+  Param,
+  Patch,
   Post,
   Query,
 } from '@nestjs/common'
@@ -12,16 +16,27 @@ import {
   ApiBearerAuth,
   ApiBody,
   ApiOperation,
+  ApiParam,
   ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger'
+import { IsEnum, IsOptional, IsString, MinLength } from 'class-validator'
 import { CurrentUser, CurrentUserPayload } from '@/infra/auth/decorators/current-user.decorator'
 import { Roles } from '@/infra/auth/decorators/roles.decorator'
 import { ListWorkspaceUsersUseCase } from '@/domain/auth/application/use-cases/list-workspace-users/list-workspace-users.use-case'
 import { RegisterUserUseCase } from '@/domain/auth/application/use-cases/register-user/register-user.use-case'
+import { UpdateWorkspaceUserUseCase } from '@/domain/auth/application/use-cases/update-workspace-user/update-workspace-user.use-case'
+import { SoftDeleteWorkspaceUserUseCase } from '@/domain/auth/application/use-cases/soft-delete-workspace-user/soft-delete-workspace-user.use-case'
 import { RegisterUserDto } from '../dtos/register-user.dto'
-import { UserRole } from '@/domain/auth/enterprise/value-objects/user-role.vo'
+import { UserRole, RoleType } from '@/domain/auth/enterprise/value-objects/user-role.vo'
+
+class UpdateWorkspaceUserDto {
+  @IsOptional() @IsString() @MinLength(2) name?: string
+  @IsOptional() @IsString() timezone?: string
+  @IsOptional() @IsString() language?: string
+  @IsOptional() @IsEnum(['PLATFORM_OWNER', 'RESELLER', 'ACCOUNT_ADMIN', 'MEMBER', 'AGENT']) role?: RoleType
+}
 
 class WorkspaceUserResponse {
   identityId!: string
@@ -41,6 +56,8 @@ export class WorkspaceController {
   constructor(
     private readonly listUsersUseCase: ListWorkspaceUsersUseCase,
     private readonly registerUserUseCase: RegisterUserUseCase,
+    private readonly updateUserUseCase: UpdateWorkspaceUserUseCase,
+    private readonly softDeleteUserUseCase: SoftDeleteWorkspaceUserUseCase,
   ) {}
 
   // ─── GET /workspace/users ─────────────────────────────────────────────────
@@ -122,6 +139,70 @@ export class WorkspaceController {
       email: result.value.email,
       name: result.value.name,
       role: result.value.role,
+    }
+  }
+
+  // ─── PATCH /workspace/users/:identityId ──────────────────────────────────
+
+  @Patch('users/:identityId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Update a workspace user (name, timezone, language, role)' })
+  @ApiParam({ name: 'identityId', description: 'Identity ID of the target user' })
+  @ApiBody({ type: UpdateWorkspaceUserDto })
+  @ApiResponse({ status: 204, description: 'User updated.' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions.' })
+  @ApiResponse({ status: 404, description: 'User not found.' })
+  async updateUser(
+    @Param('identityId') identityId: string,
+    @Body() dto: UpdateWorkspaceUserDto,
+    @CurrentUser() user: CurrentUserPayload,
+  ) {
+    const result = await this.updateUserUseCase.execute({
+      callerTenantId: user.tenantId,
+      callerRole: user.role,
+      targetIdentityId: identityId,
+      updates: {
+        name: dto.name,
+        timezone: dto.timezone,
+        language: dto.language,
+        role: dto.role,
+      },
+    })
+
+    if (result.isLeft()) {
+      const err = result.value
+      if (err.message === 'User not found') throw new NotFoundException(err.message)
+      throw new ForbiddenException(err.message)
+    }
+  }
+
+  // ─── DELETE /workspace/users/:identityId ─────────────────────────────────
+
+  @Delete('users/:identityId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Soft-delete a workspace user' })
+  @ApiParam({ name: 'identityId', description: 'Identity ID of the target user' })
+  @ApiResponse({ status: 204, description: 'User soft-deleted.' })
+  @ApiResponse({ status: 400, description: 'Cannot delete own account.' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions.' })
+  @ApiResponse({ status: 404, description: 'User not found.' })
+  async softDeleteUser(
+    @Param('identityId') identityId: string,
+    @CurrentUser() user: CurrentUserPayload,
+  ) {
+    const result = await this.softDeleteUserUseCase.execute({
+      callerTenantId: user.tenantId,
+      callerRole: user.role,
+      callerIdentityId: user.sub,
+      targetIdentityId: identityId,
+    })
+
+    if (result.isLeft()) {
+      const err = result.value
+      if (err.message === 'User not found') throw new NotFoundException(err.message)
+      throw new ForbiddenException(err.message)
     }
   }
 }

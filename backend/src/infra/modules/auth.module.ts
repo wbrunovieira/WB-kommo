@@ -17,6 +17,8 @@ import { CreateTenantUseCase } from '@/domain/tenants/application/use-cases/crea
 import { ListTenantsUseCase } from '@/domain/tenants/application/use-cases/list-tenants/list-tenants.use-case'
 import { TenantsController } from '@/infra/http/controllers/tenants.controller'
 import { ListWorkspaceUsersUseCase } from '@/domain/auth/application/use-cases/list-workspace-users/list-workspace-users.use-case'
+import { UpdateWorkspaceUserUseCase } from '@/domain/auth/application/use-cases/update-workspace-user/update-workspace-user.use-case'
+import { SoftDeleteWorkspaceUserUseCase } from '@/domain/auth/application/use-cases/soft-delete-workspace-user/soft-delete-workspace-user.use-case'
 import { WorkspaceController } from '@/infra/http/controllers/workspace.controller'
 
 @Module({
@@ -44,6 +46,8 @@ import { WorkspaceController } from '@/infra/http/controllers/workspace.controll
     CreateTenantUseCase,
     ListTenantsUseCase,
     ListWorkspaceUsersUseCase,
+    UpdateWorkspaceUserUseCase,
+    SoftDeleteWorkspaceUserUseCase,
   ],
   exports: [JwtAuthGuard, RolesGuard, JwtModule, DatabaseModule],
 })
