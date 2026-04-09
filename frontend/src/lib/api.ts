@@ -56,27 +56,39 @@ export interface RegisteredUser {
   role: string
 }
 
+// Singleton promise: prevents multiple concurrent 401s from each triggering
+// their own refresh call (token rotation would invalidate the first rotated
+// token before the others even read it, causing a cascade redirect to login).
+let _refreshing: Promise<string | null> | null = null
+
 async function tryRefreshToken(): Promise<string | null> {
-  try {
-    const res = await fetch(`${BASE_URL}/auth/refresh`, {
-      method: 'POST',
-      credentials: 'include',
-    })
-    if (!res.ok) return null
-    const data: AuthTokens = await res.json()
-    // Update localStorage directly to avoid circular import with auth.ts
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('wb_access_token', data.accessToken)
-      localStorage.setItem('wb_user', JSON.stringify({
-        userId: data.userId,
-        tenantId: data.tenantId,
-        role: data.role,
-      }))
+  if (_refreshing) return _refreshing
+
+  _refreshing = (async () => {
+    try {
+      const res = await fetch(`${BASE_URL}/auth/refresh`, {
+        method: 'POST',
+        credentials: 'include',
+      })
+      if (!res.ok) return null
+      const data: AuthTokens = await res.json()
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('wb_access_token', data.accessToken)
+        localStorage.setItem('wb_user', JSON.stringify({
+          userId: data.userId,
+          tenantId: data.tenantId,
+          role: data.role,
+        }))
+      }
+      return data.accessToken
+    } catch {
+      return null
+    } finally {
+      _refreshing = null
     }
-    return data.accessToken
-  } catch {
-    return null
-  }
+  })()
+
+  return _refreshing
 }
 
 async function apiFetch<T>(path: string, init: RequestInit, accessToken: string, isRetry = false): Promise<T> {
