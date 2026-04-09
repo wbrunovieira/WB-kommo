@@ -12,8 +12,10 @@ import {
 } from '@nestjs/common'
 import {
   ApiBearerAuth,
+  ApiBody,
   ApiOperation,
   ApiParam,
+  ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger'
@@ -47,6 +49,7 @@ export class LeadsController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a new lead' })
+  @ApiBody({ type: CreateLeadDto })
   @ApiResponse({ status: 201, description: 'Lead created successfully.' })
   @ApiResponse({ status: 400, description: 'Invalid request body.' })
   @ApiResponse({ status: 401, description: 'Not authenticated.' })
@@ -85,6 +88,9 @@ export class LeadsController {
   @Get()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'List leads for the current tenant' })
+  @ApiQuery({ name: 'pipelineId', required: false, description: 'Filter by pipeline ID' })
+  @ApiQuery({ name: 'stageId', required: false, description: 'Filter by stage ID' })
+  @ApiQuery({ name: 'status', required: false, enum: ['OPEN', 'WON', 'LOST'], description: 'Filter by lead status' })
   @ApiResponse({ status: 200, description: 'List of leads.' })
   @ApiResponse({ status: 401, description: 'Not authenticated.' })
   async list(@Query() query: Record<string, string>, @CurrentUser() user: CurrentUserPayload) {
@@ -131,6 +137,7 @@ export class LeadsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Update a lead' })
   @ApiParam({ name: 'id', description: 'Lead ID' })
+  @ApiBody({ type: UpdateLeadDto })
   @ApiResponse({ status: 200, description: 'Updated lead data.' })
   @ApiResponse({ status: 401, description: 'Not authenticated.' })
   @ApiResponse({ status: 403, description: 'Insufficient permissions.' })

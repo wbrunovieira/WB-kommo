@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common'
 import {
   ApiBearerAuth,
+  ApiBody,
   ApiOperation,
   ApiParam,
   ApiResponse,
@@ -68,6 +69,7 @@ export class PipelinesController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a new pipeline' })
+  @ApiBody({ type: CreatePipelineDto })
   @ApiResponse({ status: 201, description: 'Pipeline created successfully.' })
   @ApiResponse({ status: 400, description: 'Invalid request body.' })
   @ApiResponse({ status: 401, description: 'Not authenticated.' })
@@ -93,6 +95,7 @@ export class PipelinesController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Update a pipeline' })
   @ApiParam({ name: 'id', description: 'Pipeline ID' })
+  @ApiBody({ type: UpdatePipelineDto })
   @ApiResponse({ status: 200, description: 'Updated pipeline data.' })
   @ApiResponse({ status: 401, description: 'Not authenticated.' })
   @ApiResponse({ status: 403, description: 'Insufficient permissions.' })
@@ -158,6 +161,7 @@ export class PipelinesController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a stage within a pipeline' })
   @ApiParam({ name: 'id', description: 'Pipeline ID' })
+  @ApiBody({ type: CreateStageDto })
   @ApiResponse({ status: 201, description: 'Stage created successfully.' })
   @ApiResponse({ status: 400, description: 'Invalid request body.' })
   @ApiResponse({ status: 401, description: 'Not authenticated.' })
@@ -193,6 +197,7 @@ export class PipelinesController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Reorder stages within a pipeline' })
   @ApiParam({ name: 'id', description: 'Pipeline ID' })
+  @ApiBody({ type: ReorderStagesDto })
   @ApiResponse({ status: 204, description: 'Stages reordered.' })
   @ApiResponse({ status: 401, description: 'Not authenticated.' })
   @ApiResponse({ status: 403, description: 'Insufficient permissions.' })
@@ -218,6 +223,7 @@ export class PipelinesController {
   @ApiOperation({ summary: 'Update a stage name or color' })
   @ApiParam({ name: 'id', description: 'Pipeline ID' })
   @ApiParam({ name: 'stageId', description: 'Stage ID' })
+  @ApiBody({ type: UpdateStageDto })
   @ApiResponse({ status: 200, description: 'Updated stage.' })
   @ApiResponse({ status: 401, description: 'Not authenticated.' })
   @ApiResponse({ status: 403, description: 'Insufficient permissions.' })

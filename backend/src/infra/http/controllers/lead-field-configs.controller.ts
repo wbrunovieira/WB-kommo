@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post } from '@nestjs/common'
-import { ApiBearerAuth, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger'
+import { ApiBearerAuth, ApiBody, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger'
 import { CurrentUser, CurrentUserPayload } from '@/infra/auth/decorators/current-user.decorator'
 import { ListLeadFieldConfigsUseCase } from '@/domain/leads/application/use-cases/list-lead-field-configs/list-lead-field-configs.use-case'
 import { CreateLeadFieldConfigUseCase } from '@/domain/leads/application/use-cases/create-lead-field-config/create-lead-field-config.use-case'
@@ -26,7 +26,8 @@ export class LeadFieldConfigsController {
 
   @Get()
   @ApiOperation({ summary: 'List lead field configs for the tenant' })
-  @ApiResponse({ status: 200 })
+  @ApiResponse({ status: 200, description: 'List of lead field configurations.' })
+  @ApiResponse({ status: 401, description: 'Not authenticated.' })
   async list(@CurrentUser() user: CurrentUserPayload) {
     const result = await this.listUseCase.execute({ tenantId: user.tenantId })
     if (result.isLeft()) throw result.value
@@ -36,7 +37,11 @@ export class LeadFieldConfigsController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a custom lead field' })
-  @ApiResponse({ status: 201 })
+  @ApiBody({ type: CreateLeadFieldConfigDto })
+  @ApiResponse({ status: 201, description: 'Lead field config created successfully.' })
+  @ApiResponse({ status: 400, description: 'Invalid request body.' })
+  @ApiResponse({ status: 401, description: 'Not authenticated.' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions.' })
   async create(@Body() dto: CreateLeadFieldConfigDto, @CurrentUser() user: CurrentUserPayload) {
     const result = await this.createUseCase.execute({
       tenantId: user.tenantId,
@@ -53,7 +58,10 @@ export class LeadFieldConfigsController {
   @Patch('reorder')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Reorder lead field configs' })
-  @ApiResponse({ status: 204 })
+  @ApiBody({ type: ReorderLeadFieldConfigsDto })
+  @ApiResponse({ status: 204, description: 'Field configs reordered.' })
+  @ApiResponse({ status: 401, description: 'Not authenticated.' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions.' })
   async reorder(@Body() dto: ReorderLeadFieldConfigsDto, @CurrentUser() user: CurrentUserPayload) {
     const result = await this.reorderUseCase.execute({
       tenantId: user.tenantId,
@@ -64,8 +72,12 @@ export class LeadFieldConfigsController {
 
   @Patch(':id')
   @ApiOperation({ summary: 'Update a lead field config' })
-  @ApiParam({ name: 'id', type: String })
-  @ApiResponse({ status: 200 })
+  @ApiParam({ name: 'id', description: 'Lead field config ID' })
+  @ApiBody({ type: UpdateLeadFieldConfigDto })
+  @ApiResponse({ status: 200, description: 'Updated lead field config.' })
+  @ApiResponse({ status: 401, description: 'Not authenticated.' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions.' })
+  @ApiResponse({ status: 404, description: 'Lead field config not found.' })
   async update(
     @Param('id') id: string,
     @Body() dto: UpdateLeadFieldConfigDto,
@@ -89,9 +101,12 @@ export class LeadFieldConfigsController {
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete a custom lead field config' })
-  @ApiParam({ name: 'id', type: String })
-  @ApiResponse({ status: 204 })
+  @ApiParam({ name: 'id', description: 'Lead field config ID' })
+  @ApiResponse({ status: 204, description: 'Lead field config deleted.' })
   @ApiResponse({ status: 400, description: 'Cannot delete a built-in field.' })
+  @ApiResponse({ status: 401, description: 'Not authenticated.' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions.' })
+  @ApiResponse({ status: 404, description: 'Lead field config not found.' })
   async remove(@Param('id') id: string, @CurrentUser() user: CurrentUserPayload) {
     const result = await this.deleteUseCase.execute({ configId: id, tenantId: user.tenantId })
     if (result.isLeft()) throw result.value
