@@ -25,7 +25,9 @@
 > | Frontend — i18n next-intl (pt, en, it, es) com cookie de preferência | ✅ Implementado |
 > | Frontend — Workspace lembrado no localStorage | ✅ Implementado |
 > | Logging estruturado (nestjs-pino) | 📋 Planejado (Fase 4) |
-> | Módulos CRM (leads, pipelines, activities) | ⬜ Não iniciado |
+> | PLATFORM_OWNER role + resellerTenantId + impersonation ownership | ✅ Implementado |
+| Dashboard: TenantListSection + CreateClientSection + ImpersonationBanner | ✅ Implementado |
+| Módulos CRM (leads, pipelines, activities) | ⬜ Não iniciado |
 
 ---
 
@@ -35,11 +37,12 @@ Sistema CRM SaaS para gestão de leads, inspirado no Kommo. O modelo de negócio
 
 ### Atores Principais
 
-| Ator | Descrição |
-|------|-----------|
-| **Reseller (Super Admin)** | Proprietário da plataforma. Acesso total, gerencia planos, clientes e pode impersonar qualquer conta. |
-| **Admin de Conta** | Administrador do espaço de trabalho de um cliente. Gerencia usuários, pipelines e configurações da conta. |
-| **Usuário (Member)** | Membro da equipe de um cliente. Acessa leads, pipelines e tarefas conforme permissões. |
+| Ator | Role | Descrição |
+|------|------|-----------|
+| **Platform Owner** | `PLATFORM_OWNER` | Dono da plataforma. Gerencia resellers, monitora toda a operação. **Acessa o CRM exclusivamente via impersonação** — nunca opera leads diretamente para não criar dependência com os times de vendas dos clientes. |
+| **Reseller** | `RESELLER` | Parceiro que revende assinaturas e presta suporte. Gerencia seus clientes (tenants) e pode impersonar qualquer um deles. **Acessa o CRM dos clientes via impersonação** — todas as ações ficam registradas no AuditLog com `impersonated: true`, deixando rastreável quem fez o quê. |
+| **Admin de Conta** | `ACCOUNT_ADMIN` | Administrador do workspace de um cliente. Gerencia usuários, pipelines, configurações e tem visão total dos leads da conta. Único que pode soft-deletar leads. |
+| **Membro (Vendedor)** | `MEMBER` | Vendedor da equipe. Cria e edita leads. Por padrão vê apenas seus próprios leads — visão global liberada pelo admin via permissão granular `canViewAllLeads`. **Não pode deletar leads** (nem soft-delete). |
 
 ---
 
@@ -416,35 +419,50 @@ class UserSession extends Entity<UserSessionProps> {
 ```typescript
 // Centraliza todas as regras de permissão
 class UserRole {
-  private readonly value: 'RESELLER' | 'ACCOUNT_ADMIN' | 'MEMBER'
+  private readonly value: 'PLATFORM_OWNER' | 'RESELLER' | 'ACCOUNT_ADMIN' | 'MEMBER'
 
+  isPlatformOwner(): boolean
   isReseller(): boolean
   isAccountAdmin(): boolean
   isMember(): boolean
-  isAdmin(): boolean   // true para RESELLER | ACCOUNT_ADMIN — atalho para guards
+  isAdmin(): boolean   // true para PLATFORM_OWNER | RESELLER | ACCOUNT_ADMIN
 
-  // Permissões implícitas por role
-  canManageAllTenants(): boolean    // apenas RESELLER
-  canImpersonate(): boolean         // apenas RESELLER
+  // Acesso ao CRM — PLATFORM_OWNER e RESELLER só via impersonação
+  canAccessCrmDirectly(): boolean   // apenas ACCOUNT_ADMIN | MEMBER
+  canImpersonate(): boolean         // PLATFORM_OWNER | RESELLER
+
+  // Gestão de tenants
+  canSeeAllTenants(): boolean       // apenas PLATFORM_OWNER
+  canManageOwnClients(): boolean    // PLATFORM_OWNER | RESELLER
 
   // Gestão de usuários — RESELLER cria em qualquer tenant, ACCOUNT_ADMIN cria no próprio tenant
-  canCreateUsers(): boolean         // RESELLER | ACCOUNT_ADMIN
-  canUpdateUsers(): boolean         // RESELLER | ACCOUNT_ADMIN
-  canDeleteUsers(): boolean         // RESELLER | ACCOUNT_ADMIN
-  canListUsers(): boolean           // RESELLER | ACCOUNT_ADMIN
+  canCreateUsers(): boolean         // PLATFORM_OWNER | RESELLER | ACCOUNT_ADMIN
+  canUpdateUsers(): boolean         // PLATFORM_OWNER | RESELLER | ACCOUNT_ADMIN
+  canDeleteUsers(): boolean         // PLATFORM_OWNER | RESELLER | ACCOUNT_ADMIN
+  canListUsers(): boolean           // PLATFORM_OWNER | RESELLER | ACCOUNT_ADMIN
 
-  canManagePipelines(): boolean     // RESELLER | ACCOUNT_ADMIN
-  canCreateLeads(): boolean         // todos
-  canDeleteLeads(): boolean         // RESELLER | ACCOUNT_ADMIN
-  canExportData(): boolean          // RESELLER | ACCOUNT_ADMIN
-  canViewBilling(): boolean         // RESELLER | ACCOUNT_ADMIN
-  canAccessAdminPanel(): boolean    // RESELLER | ACCOUNT_ADMIN
+  // CRM — leads
+  canCreateLeads(): boolean         // ACCOUNT_ADMIN | MEMBER (PLATFORM_OWNER/RESELLER só via impersonação)
+  canSoftDeleteLeads(): boolean     // apenas ACCOUNT_ADMIN
+  canManagePipelines(): boolean     // apenas ACCOUNT_ADMIN
+
+  // Admin geral
+  canExportData(): boolean          // PLATFORM_OWNER | RESELLER | ACCOUNT_ADMIN
+  canViewBilling(): boolean         // PLATFORM_OWNER | RESELLER | ACCOUNT_ADMIN
+  canAccessAdminPanel(): boolean    // PLATFORM_OWNER | RESELLER | ACCOUNT_ADMIN
 }
 ```
 
 **Regra de escopo na criação de usuários:**
-- `RESELLER` pode criar usuários em **qualquer tenant** (usado ao onboarding de um novo cliente).
+- `PLATFORM_OWNER` e `RESELLER` podem criar usuários em **qualquer tenant** (onboarding de clientes).
 - `ACCOUNT_ADMIN` só pode criar usuários **dentro do próprio tenant** — enforcement via `TenantGuard`.
+
+**Permissões granulares em `UserAuthorization.permissions[]`** (complementam o role):
+
+| Permissão | Concedida por | Efeito |
+|-----------|--------------|--------|
+| `canViewAllLeads` | ACCOUNT_ADMIN | MEMBER vê todos os leads da conta (padrão: só os próprios) |
+| `canEditAllLeads` | ACCOUNT_ADMIN | MEMBER edita qualquer lead (padrão: só os próprios) |
 
 #### `SessionToken`
 - Hash SHA256 do token para armazenamento seguro no banco
@@ -568,17 +586,75 @@ Estratégia: **Row-Level Tenancy com `tenantId` em todas as tabelas**.
 - Cada request autenticado carrega o `tenantId` no JWT.
 - Um `TenantGuard` global injeta o contexto de tenant em todas as queries.
 - O Prisma middleware garante que todo acesso seja filtrado pelo `tenantId` — impossível vazar dados entre tenants.
-- Dados do Reseller ficam em um tenant especial com role `RESELLER`.
+- Dados do PLATFORM_OWNER e RESELLER ficam em tenants próprios (`resellerTenantId: null`). Tenants de clientes têm `resellerTenantId` apontando para o reseller dono da conta.
 
 ### 3.12 Impersonation (Login como Cliente)
 
+**Por que PLATFORM_OWNER e RESELLER acessam o CRM somente via impersonação:**
+
+O Platform Owner e o Reseller precisam às vezes criar leads para um cliente (ex: geração de demanda) ou monitorar se os vendedores estão dando baixa corretamente. Porém, operar diretamente no CRM do cliente cria um problema de responsabilidade: o time de vendas pode entender que o admin vai "fazer por eles", reduzindo a adoção. A solução é a impersonação obrigatória: tudo que o reseller faz no CRM fica marcado no AuditLog com `impersonated: true` e o `impersonatorId`, deixando absolutamente claro quem executou cada ação e em qual contexto.
+
 Fluxo:
-1. Reseller chama `POST /auth/impersonate/:tenantId`.
-2. `ImpersonationGuard` valida role `RESELLER`.
-3. Gera JWT de curta duração (30min): `{ sub: resellerId, impersonating: tenantId, role: ACCOUNT_ADMIN }`.
+1. `PLATFORM_OWNER` ou `RESELLER` chama `POST /auth/impersonate/:tenantId`.
+2. Guard valida o role e, para RESELLER, verifica ownership (`tenant.resellerTenantId === actor.tenantId`).
+3. Gera JWT de curta duração (30min): `{ sub: actorId, impersonating: tenantId, role: ACCOUNT_ADMIN }`.
 4. Cria `UserSession` com `isImpersonation: true` e `impersonatorId`.
-5. **Todo** acesso com esse token é gravado em `AuditLog` com `impersonated: true` (imutável — sem UPDATE/DELETE).
-6. Encerrar via `POST /auth/impersonate/end` revoga a `UserSession`.
+5. **Todo** acesso com esse token é gravado em `AuditLog` com `impersonated: true` (imutável — sem UPDATE/DELETE no log).
+6. Encerrar via `POST /auth/logout` revoga a `UserSession` e o frontend restaura o token original.
+
+### 3.13 Modelo de Acesso a Leads — Inspiração Kommo e Diferenciação
+
+**Referência: como o Kommo trata permissões**
+
+O Kommo usa um sistema de permissões granulares por ação com codificação por cores: vermelho (negado), amarelo (se responsável), azul (time todo), verde (permitido). Não há roles fixos — cada usuário tem permissões configuradas individualmente. A restrição "se responsável" é o coração do modelo: vendedores por padrão só enxergam os leads que estão atribuídos a eles.
+
+**Nossa abordagem — role-based + permissões granulares opcionais:**
+
+Adotamos a filosofia do "se responsável" como padrão para MEMBER, mas via roles definidos (mais simples de operar) com válvulas de escape via permissões granulares quando o admin quiser expandir o acesso.
+
+#### Matriz de permissões do CRM
+
+| Ação | PLATFORM_OWNER | RESELLER | ACCOUNT_ADMIN | MEMBER |
+|------|---------------|----------|---------------|--------|
+| Acessar CRM diretamente | ❌ | ❌ | ✅ | ✅ |
+| Acessar CRM via impersonação | ✅ | ✅ | — | — |
+| Ver todos os leads da conta | via imp. | via imp. | ✅ | ⚙️ `canViewAllLeads` |
+| Ver apenas próprios leads | via imp. | via imp. | ✅ | ✅ (padrão) |
+| Criar lead | via imp. | via imp. | ✅ | ✅ |
+| Editar qualquer lead | via imp. | via imp. | ✅ | ⚙️ `canEditAllLeads` |
+| Editar apenas próprios leads | via imp. | via imp. | ✅ | ✅ (padrão) |
+| **Soft-delete lead** | ❌ | ❌ | ✅ | ❌ |
+| Restaurar lead deletado | ❌ | ❌ | ✅ | ❌ |
+| Ver leads deletados (arquivo) | via imp. | via imp. | ✅ | ❌ |
+| Gerenciar pipelines e stages | via imp. | via imp. | ✅ | ❌ |
+| Exportar dados | via imp. | via imp. | ✅ | ❌ |
+
+#### Política de Soft-Delete em Leads
+
+**Motivação:** Vendedores com baixa taxa de conversão ou atendimento ruim não podem apagar evidências de oportunidades perdidas ou clientes que foram mal atendidos. O soft-delete protege a integridade histórica dos dados.
+
+Regras:
+- Leads nunca são apagados fisicamente do banco (`DELETE` proibido na camada de aplicação).
+- Soft-delete: `deletedAt: DateTime`, `deletedByUserId: String`.
+- Somente `ACCOUNT_ADMIN` pode soft-deletar — `MEMBER` recebe `403` se tentar.
+- Leads deletados ficam visíveis para `ACCOUNT_ADMIN` via filtro `includeDeleted: true`.
+- Restauração disponível para `ACCOUNT_ADMIN` por até 90 dias.
+- Após 90 dias sem restauração, o lead pode ser purgado (hard delete agendado — futuro Fase 4).
+
+#### Rastreabilidade durante impersonação
+
+Todo lead criado, editado ou movido de stage durante uma sessão de impersonação recebe:
+```
+AuditLog {
+  tenantId:        <id do cliente>
+  userId:          <id do ator — reseller/platform owner>
+  impersonated:    true
+  impersonatorId:  <mesmo userId>
+  action:          'lead.created' | 'lead.updated' | 'lead.stage_changed'
+  resourceId:      <leadId>
+}
+```
+Isso permite ao ACCOUNT_ADMIN do cliente ver exatamente o que foi feito pelo reseller em sua conta.
 
 ### 3.14 VO / Entity / Use Case — Separação de Responsabilidades
 
@@ -1823,12 +1899,18 @@ Reseller → POST /auth/impersonate/:tenantId
 - [x] Workspace lembrado em localStorage — pré-preenchido com badge "Lembrado / Alterar"
 
 ### Fase 2 — Core CRM (Semanas 4-7)
-- [ ] Módulo Leads + Pipelines + Stages
+- [ ] Módulo Leads + Pipelines + Stages (TDD — entity → use cases → HTTP → e2e)
+  - Lead entity com soft-delete (`deletedAt`, `deletedByUserId`)
+  - `CreateLeadUseCase` — valida limites do plano via `PlanLimitService`
+  - `SoftDeleteLeadUseCase` — apenas ACCOUNT_ADMIN
+  - `ListLeadsUseCase` — escopo por role: MEMBER vê só seus leads (padrão) ou todos (`canViewAllLeads`)
+  - Guard `LeadScopeGuard` — injeta filtro `assignedTo` para MEMBER sem `canViewAllLeads`
+  - Pipeline + Stage CRUD (apenas ACCOUNT_ADMIN)
 - [ ] Módulo Activities + Contacts
-- [ ] Kanban board com drag & drop
-- [ ] Lead detail slide-over com timeline
+- [ ] Kanban board com drag & drop (frontend)
+- [ ] Lead detail slide-over com timeline de AuditLog
 - [ ] Filtros e busca (Criteria Pattern nos leads)
-- [ ] Testes unitários + integração do core
+- [ ] Testes unitários + integração + e2e do core CRM
 
 ### Fase 3 — SaaS Features (Semanas 8-11)
 - [ ] Módulo Plans + limites por plano
@@ -1853,3 +1935,5 @@ Reseller → POST /auth/impersonate/:tenantId
 *Versão 1.7 — atualizado em 2026-04-07: status de implementação adicionado (tabela de estado atual + roadmap com checkboxes); Fase 1 completa — 155 testes passando, auth HTTP layer, Swagger, GlobalExceptionFilter RFC 7807, Docker testes isolados, TypeScript limpo; logging estruturado planejado para Fase 4 com `nestjs-pino`.*
 
 *Versão 1.8 — atualizado em 2026-04-08: frontend Next.js 15 implementado (login + dashboard); i18n next-intl v4 com pt/en/it/es, detecção de browser, cookie de preferência e mensagens split por namespace; Refresh Token movido para httpOnly cookie; login aceita workspace slug; SeedService automático na inicialização; `esModuleInterop` adicionado ao tsconfig; workspace lembrado em localStorage; 161 testes passando.*
+
+*Versão 1.9 — atualizado em 2026-04-09: adicionado PLATFORM_OWNER na hierarquia de roles; `resellerTenantId` no modelo Tenant; política de acesso ao CRM definida (PLATFORM_OWNER e RESELLER apenas via impersonação); matriz de permissões de leads documentada; política de soft-delete obrigatório para leads (MEMBER não pode deletar); permissões granulares `canViewAllLeads` / `canEditAllLeads` para MEMBER; seção 3.13 adicionada com comparação ao modelo Kommo e rastreabilidade de impersonação; migration baseline criada (`prisma migrate dev`).*
