@@ -14,4 +14,6 @@ export const domainErrorMapping: Record<string, ErrorMapping> = {
   TenantNotFoundError: { status: 404, title: 'Tenant not found' },
   TenantSlugTakenError: { status: 409, title: 'Slug already taken' },
   PlanLimitExceededError: { status: 422, title: 'Plan limit exceeded' },
+  LeadNotFoundError:     { status: 404, title: 'Lead not found' },
+  PipelineNotFoundError: { status: 404, title: 'Pipeline not found' },
 }

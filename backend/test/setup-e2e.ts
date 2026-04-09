@@ -10,9 +10,22 @@ beforeAll(async () => {
   process.env.DATABASE_URL = schemaUrl
 
   execSync('npx prisma db push --force-reset', {
-    env: { ...process.env, DATABASE_URL: schemaUrl },
+    env: {
+      ...process.env,
+      DATABASE_URL: schemaUrl,
+      PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION: 'yes',
+    },
     stdio: 'inherit',
   })
+
+  // Seed the default reseller plan used by tenants controller
+  const prisma = new PrismaClient({ datasources: { db: { url: schemaUrl } } })
+  await prisma.plan.upsert({
+    where: { id: 'plan-reseller' },
+    update: {},
+    create: { id: 'plan-reseller', name: 'Reseller', maxUsers: -1, maxLeads: -1, price: 0 },
+  })
+  await prisma.$disconnect()
 })
 
 afterAll(async () => {

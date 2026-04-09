@@ -74,7 +74,15 @@ export class UserRole {
   }
 
   canDeleteLeads(): boolean {
-    return this._value !== 'MEMBER'
+    return this._value === 'ACCOUNT_ADMIN'
+  }
+
+  canAccessCrmDirectly(): boolean {
+    return this._value === 'ACCOUNT_ADMIN' || this._value === 'MEMBER'
+  }
+
+  canManageOwnClients(): boolean {
+    return this._value === 'PLATFORM_OWNER' || this._value === 'RESELLER'
   }
 
   canExportData(): boolean {

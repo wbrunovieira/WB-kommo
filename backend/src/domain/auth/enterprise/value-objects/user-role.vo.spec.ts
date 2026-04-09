@@ -25,7 +25,15 @@ describe('UserRole VO', () => {
       expect(role.canAccessAdminPanel()).toBe(true)
       expect(role.canManagePipelines()).toBe(true)
       expect(role.canCreateLeads()).toBe(true)
-      expect(role.canDeleteLeads()).toBe(true)
+      expect(role.canDeleteLeads()).toBe(false)
+    })
+
+    it('canAccessCrmDirectly() should be false for PLATFORM_OWNER', () => {
+      expect(role.canAccessCrmDirectly()).toBe(false)
+    })
+
+    it('canManageOwnClients() should be true for PLATFORM_OWNER', () => {
+      expect(role.canManageOwnClients()).toBe(true)
     })
 
     it('isAdmin() should be true', () => {
@@ -56,7 +64,15 @@ describe('UserRole VO', () => {
       expect(role.canAccessAdminPanel()).toBe(true)
       expect(role.canManagePipelines()).toBe(true)
       expect(role.canCreateLeads()).toBe(true)
-      expect(role.canDeleteLeads()).toBe(true)
+      expect(role.canDeleteLeads()).toBe(false)
+    })
+
+    it('canAccessCrmDirectly() should be false for RESELLER', () => {
+      expect(role.canAccessCrmDirectly()).toBe(false)
+    })
+
+    it('canManageOwnClients() should be true for RESELLER', () => {
+      expect(role.canManageOwnClients()).toBe(true)
     })
 
     it('isAdmin() should be true', () => {
@@ -85,6 +101,15 @@ describe('UserRole VO', () => {
       expect(role.canExportData()).toBe(true)
       expect(role.canManagePipelines()).toBe(true)
       expect(role.canCreateLeads()).toBe(true)
+      expect(role.canDeleteLeads()).toBe(true)
+    })
+
+    it('canAccessCrmDirectly() should be true for ACCOUNT_ADMIN', () => {
+      expect(role.canAccessCrmDirectly()).toBe(true)
+    })
+
+    it('canManageOwnClients() should be false for ACCOUNT_ADMIN', () => {
+      expect(role.canManageOwnClients()).toBe(false)
     })
 
     it('isAdmin() should be true', () => {
@@ -110,6 +135,14 @@ describe('UserRole VO', () => {
       expect(role.canExportData()).toBe(false)
       expect(role.canImpersonate()).toBe(false)
       expect(role.canSeeAllTenants()).toBe(false)
+    })
+
+    it('canAccessCrmDirectly() should be true for MEMBER', () => {
+      expect(role.canAccessCrmDirectly()).toBe(true)
+    })
+
+    it('canManageOwnClients() should be false for MEMBER', () => {
+      expect(role.canManageOwnClients()).toBe(false)
     })
 
     it('isAdmin() should be false', () => {

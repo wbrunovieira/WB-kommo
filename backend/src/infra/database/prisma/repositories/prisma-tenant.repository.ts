@@ -14,7 +14,19 @@ export class PrismaTenantRepository implements ITenantRepository {
     try {
       const tenant = await this.prisma.tenant.findUnique({
         where: { slug },
-        select: { id: true, isActive: true },
+        select: { id: true, isActive: true, planId: true },
+      })
+      return right(tenant ?? null)
+    } catch (err) {
+      return left(err instanceof Error ? err : new Error(String(err)))
+    }
+  }
+
+  async findById(id: string): Promise<Either<Error, TenantSummary | null>> {
+    try {
+      const tenant = await this.prisma.tenant.findUnique({
+        where: { id },
+        select: { id: true, isActive: true, planId: true },
       })
       return right(tenant ?? null)
     } catch (err) {

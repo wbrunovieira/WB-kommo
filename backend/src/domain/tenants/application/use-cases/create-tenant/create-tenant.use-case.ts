@@ -18,7 +18,7 @@ export interface CreateTenantResponse {
   resellerTenantId: string | null
 }
 
-export type CreateTenantResult = Either<TenantSlugTakenError, CreateTenantResponse>
+export type CreateTenantResult = Either<TenantSlugTakenError | Error, CreateTenantResponse>
 
 @Injectable()
 export class CreateTenantUseCase {
@@ -36,7 +36,8 @@ export class CreateTenantUseCase {
       resellerTenantId: request.resellerTenantId,
     })
 
-    await this.tenantRepo.save(tenant)
+    const saveResult = await this.tenantRepo.save(tenant)
+    if (saveResult.isLeft()) return left(saveResult.value)
 
     return right({
       id: tenant.id.toString(),

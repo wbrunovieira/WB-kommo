@@ -8,7 +8,12 @@ export class InMemoryTenantRepository implements ITenantRepository {
 
   async findBySlug(slug: string): Promise<Either<Error, TenantSummary | null>> {
     const tenant = this.items.find((t) => t.slug === slug)
-    return right(tenant ? { id: tenant.id, isActive: tenant.isActive } : null)
+    return right(tenant ? { id: tenant.id, isActive: tenant.isActive, planId: tenant.planId ?? '' } : null)
+  }
+
+  async findById(id: string): Promise<Either<Error, TenantSummary | null>> {
+    const tenant = this.savedTenants.find((t) => t.id.toString() === id)
+    return right(tenant ? { id: tenant.id.toString(), isActive: tenant.isActive, planId: tenant.planId } : null)
   }
 
   async findClientsByReseller(resellerTenantId: string): Promise<Either<Error, TenantListItem[]>> {
@@ -29,6 +34,7 @@ export class InMemoryTenantRepository implements ITenantRepository {
       id: tenant.id.toString(),
       name: tenant.name,
       slug: tenant.slug,
+      planId: tenant.planId,
       isActive: tenant.isActive,
       resellerTenantId: tenant.resellerTenantId,
     })

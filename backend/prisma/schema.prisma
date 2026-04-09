@@ -219,6 +219,7 @@ model Lead {
   customFields Json?
   tags         String[]   @default([])
   deletedAt    DateTime?
+  deletedByUserId String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
