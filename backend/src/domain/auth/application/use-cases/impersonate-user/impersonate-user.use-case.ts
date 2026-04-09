@@ -68,6 +68,7 @@ export class ImpersonateUserUseCase {
       isImpersonation: true,
       impersonatorId: request.resellerId,
       expiresAt,
+      role: authorization.role.value,
     })
 
     await this.sessionRepo.save(session)

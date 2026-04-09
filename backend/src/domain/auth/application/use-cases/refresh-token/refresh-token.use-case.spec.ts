@@ -5,7 +5,7 @@ import { SessionToken } from '@/domain/auth/enterprise/value-objects/session-tok
 import { UserSession } from '@/domain/auth/enterprise/entities/user-session.entity'
 import { SessionNotFoundError } from '../errors/session-not-found.error'
 
-function makeActiveSession(overrides: { expiresInMs?: number } = {}) {
+function makeActiveSession(overrides: { expiresInMs?: number; role?: string } = {}) {
   const token = SessionToken.generate()
   const expiresAt = new Date(Date.now() + (overrides.expiresInMs ?? 60000))
   return { session: UserSession.create({
@@ -14,6 +14,7 @@ function makeActiveSession(overrides: { expiresInMs?: number } = {}) {
     refreshToken: token,
     expiresAt,
     isImpersonation: false,
+    role: overrides.role ?? 'ACCOUNT_ADMIN',
   }), rawToken: token.rawToken! }
 }
 
@@ -37,6 +38,18 @@ describe('RefreshTokenUseCase', () => {
       expect(result.value).toHaveProperty('accessToken')
       expect(result.value).toHaveProperty('refreshToken')
       expect(result.value.refreshToken).not.toBe(rawToken)
+    }
+  })
+
+  it('should return the role from the original session', async () => {
+    const { session, rawToken } = makeActiveSession({ role: 'PLATFORM_OWNER' })
+    sessionRepo.items.push(session)
+
+    const result = await sut.execute({ refreshToken: rawToken })
+
+    expect(result.isRight()).toBe(true)
+    if (result.isRight()) {
+      expect(result.value.role).toBe('PLATFORM_OWNER')
     }
   })
 

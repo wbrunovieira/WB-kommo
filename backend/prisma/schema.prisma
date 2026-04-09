@@ -161,6 +161,7 @@ model UserSession {
   impersonatorId   String?
   expiresAt        DateTime
   revokedAt        DateTime?
+  role             String    @default("MEMBER")
 
   createdAt DateTime @default(now())
 

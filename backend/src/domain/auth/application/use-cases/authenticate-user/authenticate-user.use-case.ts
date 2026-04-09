@@ -85,6 +85,7 @@ export class AuthenticateUserUseCase {
       userAgent: request.userAgent,
       expiresAt,
       isImpersonation: false,
+      role: authorization.role.value,
     })
 
     await this.sessionRepo.save(session)

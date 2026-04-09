@@ -17,6 +17,7 @@ export class PrismaUserSessionMapper {
         expiresAt: raw.expiresAt,
         revokedAt: raw.revokedAt ?? undefined,
         createdAt: raw.createdAt,
+        role: raw.role,
       },
       new UniqueEntityID(raw.id),
     )
@@ -36,6 +37,7 @@ export class PrismaUserSessionMapper {
       impersonatorId: entity.impersonatorId ?? null,
       expiresAt: entity.expiresAt,
       revokedAt: entity.revokedAt ?? null,
+      role: entity.role,
     }
   }
 }

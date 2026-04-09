@@ -56,7 +56,24 @@ export interface RegisteredUser {
   role: string
 }
 
-async function apiFetch<T>(path: string, init: RequestInit, accessToken: string): Promise<T> {
+async function tryRefreshToken(): Promise<string | null> {
+  try {
+    const res = await fetch(`${BASE_URL}/auth/refresh`, {
+      method: 'POST',
+      credentials: 'include',
+    })
+    if (!res.ok) return null
+    const data: AuthTokens = await res.json()
+    // Update stored session with new token and role
+    const { saveSession } = await import('@/lib/auth')
+    saveSession(data)
+    return data.accessToken
+  } catch {
+    return null
+  }
+}
+
+async function apiFetch<T>(path: string, init: RequestInit, accessToken: string, isRetry = false): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     ...init,
     headers: {
@@ -68,8 +85,13 @@ async function apiFetch<T>(path: string, init: RequestInit, accessToken: string)
   })
 
   if (res.status === 401) {
-    // Token expired or invalid — clear session and redirect to login
-    if (typeof window !== 'undefined') {
+    if (!isRetry && typeof window !== 'undefined') {
+      // Attempt token refresh once
+      const newToken = await tryRefreshToken()
+      if (newToken) {
+        return apiFetch<T>(path, init, newToken, true)
+      }
+      // Refresh failed — clear session and redirect to login
       localStorage.clear()
       window.location.href = '/login'
     }

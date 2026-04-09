@@ -15,6 +15,7 @@ export interface RefreshTokenResponse {
   refreshToken: string
   userId: string
   tenantId: string
+  role: string
 }
 
 export type RefreshTokenResult = Either<SessionNotFoundError, RefreshTokenResponse>
@@ -54,6 +55,7 @@ export class RefreshTokenUseCase {
       refreshToken: newToken.rawToken!,
       userId: session.identityId,
       tenantId: session.tenantId,
+      role: session.role,
     })
   }
 }

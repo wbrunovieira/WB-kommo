@@ -59,4 +59,29 @@ describe('UserSession', () => {
       expect(session.impersonatorId).toBe('reseller-id')
     })
   })
+
+  describe('role', () => {
+    it('should store and expose the role', () => {
+      const session = UserSession.create({
+        tenantId: 'tenant-1',
+        identityId: 'identity-1',
+        refreshToken: SessionToken.generate(),
+        expiresAt: new Date(Date.now() + 60000),
+        isImpersonation: false,
+        role: 'PLATFORM_OWNER',
+      })
+      expect(session.role).toBe('PLATFORM_OWNER')
+    })
+
+    it('should default to MEMBER when role is not provided', () => {
+      const session = UserSession.create({
+        tenantId: 'tenant-1',
+        identityId: 'identity-1',
+        refreshToken: SessionToken.generate(),
+        expiresAt: new Date(Date.now() + 60000),
+        isImpersonation: false,
+      })
+      expect(session.role).toBe('MEMBER')
+    })
+  })
 })

@@ -13,6 +13,7 @@ export interface UserSessionProps {
   expiresAt: Date
   revokedAt?: Date
   createdAt?: Date
+  role?: string
 }
 
 export class UserSession extends Entity<UserSessionProps> {
@@ -40,6 +41,7 @@ export class UserSession extends Entity<UserSessionProps> {
   get impersonatorId(): string | undefined { return this.props.impersonatorId }
   get expiresAt(): Date { return this.props.expiresAt }
   get revokedAt(): Date | undefined { return this.props.revokedAt }
+  get role(): string { return this.props.role ?? 'MEMBER' }
 
   isValid(): boolean {
     if (this.props.revokedAt) return false

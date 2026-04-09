@@ -169,8 +169,7 @@ export class AuthController {
     const result = await this.refreshTokenUseCase.execute({ refreshToken: rawToken })
     if (result.isLeft()) throw result.value
 
-    const { userId, tenantId, refreshToken } = result.value
-    const role = 'MEMBER'
+    const { userId, tenantId, refreshToken, role } = result.value
     const accessToken = this.jwtService.sign({ sub: userId, tenantId, role })
 
     res.cookie(REFRESH_COOKIE, refreshToken, refreshCookieOptions(this.isProduction))
