@@ -1,0 +1,26 @@
+{
+  "users": {
+    "title": "Usuários",
+    "subtitle": "Gerencie os usuários do seu workspace",
+    "addUser": "Adicionar Usuário",
+    "loading": "Carregando usuários...",
+    "empty": "Nenhum usuário encontrado",
+    "colName": "Nome",
+    "colEmail": "E-mail",
+    "colRole": "Papel",
+    "colVerified": "Verificado",
+    "colJoined": "Criado em",
+    "fieldName": "Nome completo",
+    "fieldEmail": "E-mail",
+    "fieldPassword": "Senha",
+    "passwordHint": "Mín. 8 caracteres, maiúscula, número e especial",
+    "fieldRole": "Papel",
+    "cancel": "Cancelar",
+    "save": "Criar usuário",
+    "saving": "Criando...",
+    "createError": "Erro ao criar usuário",
+    "role_ACCOUNT_ADMIN": "Administrador",
+    "role_MEMBER": "Membro",
+    "role_AGENT": "Agente"
+  }
+}

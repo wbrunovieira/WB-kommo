@@ -15,32 +15,45 @@ export function AppSidebar({ user, onLogout }: Props) {
   const t = useTranslations('nav')
   const pathname = usePathname()
 
+  const isAgent = user.role === 'AGENT'
+
   const navItems = [
     {
       key: 'dashboard',
       href: '/dashboard' as const,
       icon: <DashboardIcon />,
       label: t('dashboard'),
+      hidden: false,
     },
     {
       key: 'leads',
       href: '/leads' as const,
       icon: <LeadsIcon />,
       label: t('leads'),
+      hidden: false,
     },
     {
       key: 'pipelines',
       href: '/pipelines' as const,
       icon: <PipelinesIcon />,
       label: t('pipelines'),
+      hidden: isAgent,
+    },
+    {
+      key: 'users',
+      href: '/users' as const,
+      icon: <UsersIcon />,
+      label: t('users'),
+      hidden: isAgent,
     },
     {
       key: 'settings',
       href: '/settings' as const,
       icon: <SettingsIcon />,
       label: t('settings'),
+      hidden: isAgent,
     },
-  ]
+  ].filter((item) => !item.hidden)
 
   return (
     <aside style={{
@@ -181,6 +194,17 @@ function DashboardIcon() {
 }
 
 function LeadsIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  )
+}
+
+function UsersIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />

@@ -8,7 +8,7 @@ import { routing } from './routing'
  * so components keep using useTranslations('login'), useTranslations('dashboard'), etc.
  * To add a new module, create the JSON files and add the namespace here.
  */
-const NAMESPACES = ['common', 'auth', 'dashboard', 'leads', 'pipelines', 'settings'] as const
+const NAMESPACES = ['common', 'auth', 'dashboard', 'leads', 'pipelines', 'settings', 'users'] as const
 
 export default getRequestConfig(async ({ requestLocale }) => {
   let locale = await requestLocale

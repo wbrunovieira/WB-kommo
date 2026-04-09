@@ -37,4 +37,27 @@ export class InMemoryUserAggregatedViewRepository implements IUserAggregatedView
 
     return right({ identity, profile, authorization })
   }
+
+  async findByTenant(tenantId: string): Promise<Either<Error, UserAggregatedView[]>> {
+    const identities = this.identityRepo.items.filter(
+      (i) => i.tenantId === tenantId && !i.deletedAt,
+    )
+
+    const views: UserAggregatedView[] = []
+    for (const identity of identities) {
+      const profileResult = await this.profileRepo.findByIdentityId(identity.id.toString())
+      if (profileResult.isLeft()) return left(profileResult.value)
+      const profile = profileResult.value
+      if (!profile) continue
+
+      const authResult = await this.authorizationRepo.findByIdentityId(identity.id.toString())
+      if (authResult.isLeft()) return left(authResult.value)
+      const authorization = authResult.value
+      if (!authorization) continue
+
+      views.push({ identity, profile, authorization })
+    }
+
+    return right(views)
+  }
 }

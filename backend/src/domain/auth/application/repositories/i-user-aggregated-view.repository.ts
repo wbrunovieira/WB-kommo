@@ -14,4 +14,8 @@ export abstract class IUserAggregatedViewRepository {
     tenantId: string,
     email: string,
   ): Promise<Either<Error, UserAggregatedView | null>>
+
+  abstract findByTenant(
+    tenantId: string,
+  ): Promise<Either<Error, UserAggregatedView[]>>
 }

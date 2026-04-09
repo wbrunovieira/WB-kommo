@@ -7,13 +7,16 @@
     "dashboard": "Dashboard",
     "leads": "Leads",
     "pipelines": "Pipelines",
+    "users": "Usuários",
     "settings": "Configurações",
     "logout": "Sair"
   },
   "roles": {
+    "PLATFORM_OWNER": "Dono da plataforma",
     "RESELLER": "Revendedor",
     "ACCOUNT_ADMIN": "Administrador",
-    "MEMBER": "Membro"
+    "MEMBER": "Membro",
+    "AGENT": "Agente"
   },
   "actions": {
     "save": "Salvar",

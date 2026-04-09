@@ -34,4 +34,25 @@ export class PrismaUserAggregatedViewRepository implements IUserAggregatedViewRe
       return left(new Error(`Failed to fetch aggregated user view: ${err}`))
     }
   }
+
+  async findByTenant(tenantId: string): Promise<Either<Error, UserAggregatedView[]>> {
+    try {
+      const rows = await this.prisma.userIdentity.findMany({
+        where: { tenantId, deletedAt: null },
+        include: { profile: true, authorization: true },
+      })
+
+      const views: UserAggregatedView[] = rows
+        .filter((r) => r.profile && r.authorization)
+        .map((r) => ({
+          identity: PrismaUserIdentityMapper.toDomain(r),
+          profile: PrismaUserProfileMapper.toDomain(r.profile!),
+          authorization: PrismaUserAuthorizationMapper.toDomain(r.authorization!),
+        }))
+
+      return right(views)
+    } catch (err) {
+      return left(new Error(`Failed to fetch tenant users: ${err}`))
+    }
+  }
 }

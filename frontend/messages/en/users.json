@@ -1,0 +1,26 @@
+{
+  "users": {
+    "title": "Users",
+    "subtitle": "Manage your workspace users",
+    "addUser": "Add User",
+    "loading": "Loading users...",
+    "empty": "No users found",
+    "colName": "Name",
+    "colEmail": "Email",
+    "colRole": "Role",
+    "colVerified": "Verified",
+    "colJoined": "Joined",
+    "fieldName": "Full name",
+    "fieldEmail": "Email",
+    "fieldPassword": "Password",
+    "passwordHint": "Min. 8 chars, uppercase, number & special",
+    "fieldRole": "Role",
+    "cancel": "Cancel",
+    "save": "Create user",
+    "saving": "Creating...",
+    "createError": "Failed to create user",
+    "role_ACCOUNT_ADMIN": "Administrator",
+    "role_MEMBER": "Member",
+    "role_AGENT": "Agent"
+  }
+}

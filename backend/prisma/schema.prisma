@@ -15,6 +15,7 @@ enum RoleType {
   RESELLER
   ACCOUNT_ADMIN
   MEMBER
+  AGENT
 }
 
 enum LeadStatus {

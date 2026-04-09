@@ -46,7 +46,20 @@ export interface RegisterUserPayload {
   name: string
   email: string
   password: string
-  role: 'ACCOUNT_ADMIN' | 'MEMBER'
+  role: 'PLATFORM_OWNER' | 'RESELLER' | 'ACCOUNT_ADMIN' | 'MEMBER' | 'AGENT'
+  timezone?: string
+  language?: string
+}
+
+export interface WorkspaceUser {
+  identityId: string
+  name: string
+  email: string
+  role: string
+  timezone: string
+  language: string
+  isEmailVerified: boolean
+  createdAt: string
 }
 
 export interface RegisteredUser {
@@ -168,6 +181,18 @@ export async function registerUser(payload: RegisterUserPayload, accessToken: st
     method: 'POST',
     body: JSON.stringify(payload),
   }, accessToken)
+}
+
+export async function getWorkspaceUsers(token: string, tenantId?: string): Promise<WorkspaceUser[]> {
+  const query = tenantId ? `?tenantId=${tenantId}` : ''
+  return apiFetch<WorkspaceUser[]>(`/workspace/users${query}`, { method: 'GET' }, token)
+}
+
+export async function createWorkspaceUser(payload: RegisterUserPayload, token: string): Promise<RegisteredUser> {
+  return apiFetch<RegisteredUser>('/workspace/users', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }, token)
 }
 
 // ── Leads ──────────────────────────────────────────────────────────────────────

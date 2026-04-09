@@ -65,6 +65,7 @@ export class UserIdentity extends AggregateRoot<UserIdentityProps> {
   get lockedUntil(): Date | undefined { return this.props.lockedUntil }
   get lastLoginAt(): Date | undefined { return this.props.lastLoginAt }
   get deletedAt(): Date | undefined { return this.props.deletedAt }
+  get createdAt(): Date { return this.props.createdAt ?? new Date() }
 
   // ── domain methods ────────────────────────────────────────────────────────
 

@@ -16,6 +16,8 @@ import { ImpersonateUserUseCase } from '@/domain/auth/application/use-cases/impe
 import { CreateTenantUseCase } from '@/domain/tenants/application/use-cases/create-tenant/create-tenant.use-case'
 import { ListTenantsUseCase } from '@/domain/tenants/application/use-cases/list-tenants/list-tenants.use-case'
 import { TenantsController } from '@/infra/http/controllers/tenants.controller'
+import { ListWorkspaceUsersUseCase } from '@/domain/auth/application/use-cases/list-workspace-users/list-workspace-users.use-case'
+import { WorkspaceController } from '@/infra/http/controllers/workspace.controller'
 
 @Module({
   imports: [
@@ -29,7 +31,7 @@ import { TenantsController } from '@/infra/http/controllers/tenants.controller'
       }),
     }),
   ],
-  controllers: [AuthController, TenantsController],
+  controllers: [AuthController, TenantsController, WorkspaceController],
   providers: [
     JwtStrategy,
     JwtAuthGuard,
@@ -41,6 +43,7 @@ import { TenantsController } from '@/infra/http/controllers/tenants.controller'
     ImpersonateUserUseCase,
     CreateTenantUseCase,
     ListTenantsUseCase,
+    ListWorkspaceUsersUseCase,
   ],
   exports: [JwtAuthGuard, RolesGuard, JwtModule, DatabaseModule],
 })

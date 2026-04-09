@@ -7,13 +7,16 @@
     "dashboard": "Panel de control",
     "leads": "Leads",
     "pipelines": "Pipelines",
+    "users": "Usuarios",
     "settings": "Configuración",
     "logout": "Cerrar sesión"
   },
   "roles": {
+    "PLATFORM_OWNER": "Propietario de plataforma",
     "RESELLER": "Revendedor",
     "ACCOUNT_ADMIN": "Administrador",
-    "MEMBER": "Miembro"
+    "MEMBER": "Miembro",
+    "AGENT": "Agente"
   },
   "actions": {
     "save": "Guardar",
