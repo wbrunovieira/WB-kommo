@@ -186,6 +186,31 @@ export class PipelinesController {
     }
   }
 
+  // ─── PATCH /pipelines/:id/stages/reorder ─────────────────────────────────────
+  // NOTE: must be declared BEFORE :stageId to avoid Express matching "reorder" as a param
+
+  @Patch(':id/stages/reorder')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Reorder stages within a pipeline' })
+  @ApiParam({ name: 'id', description: 'Pipeline ID' })
+  @ApiResponse({ status: 204, description: 'Stages reordered.' })
+  @ApiResponse({ status: 401, description: 'Not authenticated.' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions.' })
+  @ApiResponse({ status: 404, description: 'Pipeline not found.' })
+  async reorderStages(
+    @Param('id') pipelineId: string,
+    @Body() dto: ReorderStagesDto,
+    @CurrentUser() user: CurrentUserPayload,
+  ) {
+    const result = await this.reorderStagesUseCase.execute({
+      pipelineId,
+      tenantId: user.tenantId,
+      actorRole: user.role as RoleType,
+      order: dto.order,
+    })
+    if (result.isLeft()) throw result.value
+  }
+
   // ─── PATCH /pipelines/:id/stages/:stageId ─────────────────────────────────────
 
   @Patch(':id/stages/:stageId')
@@ -213,29 +238,5 @@ export class PipelinesController {
     })
     if (result.isLeft()) throw result.value
     return StagePresenter.toHttp(result.value.stage)
-  }
-
-  // ─── PATCH /pipelines/:id/stages/reorder ──────────────────────────────────────
-
-  @Patch(':id/stages/reorder')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Reorder stages within a pipeline' })
-  @ApiParam({ name: 'id', description: 'Pipeline ID' })
-  @ApiResponse({ status: 204, description: 'Stages reordered.' })
-  @ApiResponse({ status: 401, description: 'Not authenticated.' })
-  @ApiResponse({ status: 403, description: 'Insufficient permissions.' })
-  @ApiResponse({ status: 404, description: 'Pipeline not found.' })
-  async reorderStages(
-    @Param('id') pipelineId: string,
-    @Body() dto: ReorderStagesDto,
-    @CurrentUser() user: CurrentUserPayload,
-  ) {
-    const result = await this.reorderStagesUseCase.execute({
-      pipelineId,
-      tenantId: user.tenantId,
-      actorRole: user.role as RoleType,
-      order: dto.order,
-    })
-    if (result.isLeft()) throw result.value
   }
 }
