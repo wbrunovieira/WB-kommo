@@ -638,8 +638,7 @@ Regras:
 - Soft-delete: `deletedAt: DateTime`, `deletedByUserId: String`.
 - Somente `ACCOUNT_ADMIN` pode soft-deletar — `MEMBER` recebe `403` se tentar.
 - Leads deletados ficam visíveis para `ACCOUNT_ADMIN` via filtro `includeDeleted: true`.
-- Restauração disponível para `ACCOUNT_ADMIN` por até 90 dias.
-- Após 90 dias sem restauração, o lead pode ser purgado (hard delete agendado — futuro Fase 4).
+- Restauração disponível para `ACCOUNT_ADMIN` a qualquer momento — sem prazo de expiração.
 
 #### Rastreabilidade durante impersonação
 
