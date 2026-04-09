@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import {
   DndContext,
@@ -49,9 +49,9 @@ export default function LeadsPage() {
   const [filterPipeline, setFilterPipeline] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [showModal, setShowModal] = useState(false)
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
   const user = getUser()
 
-  // Load pipelines and field configs on mount
   useEffect(() => {
     const token = getAccessToken()
     if (!token) return
@@ -59,39 +59,27 @@ export default function LeadsPage() {
     getLeadFieldConfigs(token).then(setFieldConfigs).catch(() => {})
   }, [])
 
-  // Auto-select first pipeline in kanban mode when none is selected
   useEffect(() => {
     if (view === 'kanban' && !filterPipeline && pipelines.length > 0) {
       setFilterPipeline(pipelines[0].id)
     }
   }, [view, filterPipeline, pipelines])
 
-  // Load stages for the selected pipeline (kanban only)
   useEffect(() => {
-    if (view !== 'kanban' || !filterPipeline) {
-      setStages([])
-      return
-    }
+    if (view !== 'kanban' || !filterPipeline) { setStages([]); return }
     const token = getAccessToken()
     if (!token) return
     setLoadingStages(true)
     getStages(filterPipeline, token)
-      .then(s => {
-        setStages([...s].sort((a, b) => a.order - b.order))
-        setLoadingStages(false)
-      })
+      .then(s => { setStages([...s].sort((a, b) => a.order - b.order)); setLoadingStages(false) })
       .catch(() => setLoadingStages(false))
   }, [view, filterPipeline])
 
-  // Load leads
   useEffect(() => {
     const token = getAccessToken()
     if (!token) return
     setLoading(true)
-    getLeads(token, {
-      pipelineId: filterPipeline || undefined,
-      status: filterStatus || undefined,
-    })
+    getLeads(token, { pipelineId: filterPipeline || undefined, status: filterStatus || undefined })
       .then(data => { setLeads(data); setLoading(false) })
       .catch(() => { setError(t('loadError')); setLoading(false) })
   }, [filterPipeline, filterStatus, t])
@@ -99,16 +87,13 @@ export default function LeadsPage() {
   function refreshLeads() {
     const token = getAccessToken()
     if (!token) return
-    getLeads(token, {
-      pipelineId: filterPipeline || undefined,
-      status: filterStatus || undefined,
-    }).then(setLeads).catch(() => {})
+    getLeads(token, { pipelineId: filterPipeline || undefined, status: filterStatus || undefined })
+      .then(setLeads).catch(() => {})
   }
 
   async function moveLead(leadId: string, targetStageId: string) {
     const token = getAccessToken()
     if (!token) return
-    // Optimistic update
     setLeads(prev => prev.map(l => l.id === leadId ? { ...l, stageId: targetStageId } : l))
     try {
       await updateLead(leadId, { stageId: targetStageId }, token)
@@ -130,61 +115,36 @@ export default function LeadsPage() {
         />
       )}
 
+      {selectedLead && (
+        <LeadDetailModal
+          lead={selectedLead}
+          stages={stages}
+          pipelines={pipelines}
+          fieldConfigs={fieldConfigs}
+          t={t}
+          onClose={() => setSelectedLead(null)}
+        />
+      )}
+
       {/* Page header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
         <div>
-          <h1 style={{ fontSize: '22px', fontWeight: 700, color: '#e8e8f0', margin: 0 }}>
-            {t('title')}
-          </h1>
-          <p style={{ fontSize: '13px', color: '#8888aa', margin: '4px 0 0' }}>
-            {t('subtitle')}
-          </p>
+          <h1 style={{ fontSize: '22px', fontWeight: 700, color: '#e8e8f0', margin: 0 }}>{t('title')}</h1>
+          <p style={{ fontSize: '13px', color: '#8888aa', margin: '4px 0 0' }}>{t('subtitle')}</p>
         </div>
-
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          {/* View toggle */}
-          <div style={{
-            display: 'flex',
-            backgroundColor: '#1a1a2e',
-            border: '1px solid #2a2a45',
-            borderRadius: '8px',
-            overflow: 'hidden',
-          }}>
-            <ViewToggleButton
-              active={view === 'kanban'}
-              onClick={() => setView('kanban')}
-              title={t('kanbanView')}
-              icon={<KanbanIcon />}
-            />
-            <ViewToggleButton
-              active={view === 'list'}
-              onClick={() => setView('list')}
-              title={t('listView')}
-              icon={<ListIcon />}
-            />
+          <div style={{ display: 'flex', backgroundColor: '#1a1a2e', border: '1px solid #2a2a45', borderRadius: '8px', overflow: 'hidden' }}>
+            <ViewToggleButton active={view === 'kanban'} onClick={() => setView('kanban')} title={t('kanbanView')} icon={<KanbanIcon />} />
+            <ViewToggleButton active={view === 'list'} onClick={() => setView('list')} title={t('listView')} icon={<ListIcon />} />
           </div>
-
-          {/* New lead button */}
           {(user?.role === 'PLATFORM_OWNER' || user?.role === 'ACCOUNT_ADMIN' || user?.role === 'MEMBER') && (
-            <button
-              onClick={() => setShowModal(true)}
-              style={{
-                backgroundColor: '#6c63ff',
-                color: '#fff',
-                border: 'none',
-                borderRadius: '8px',
-                padding: '10px 20px',
-                fontSize: '14px',
-                fontWeight: 600,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-              }}
-            >
+            <button onClick={() => setShowModal(true)} style={{
+              backgroundColor: '#6c63ff', color: '#fff', border: 'none', borderRadius: '8px',
+              padding: '10px 20px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: '6px',
+            }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="12" y1="5" x2="12" y2="19" />
-                <line x1="5" y1="12" x2="19" y2="12" />
+                <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
               </svg>
               {t('newLead')}
             </button>
@@ -193,32 +153,12 @@ export default function LeadsPage() {
       </div>
 
       {/* Filters */}
-      <div style={{
-        backgroundColor: '#16213e',
-        borderRadius: '12px',
-        border: '1px solid #2a2a45',
-        padding: '16px 20px',
-        marginBottom: '20px',
-        display: 'flex',
-        gap: '12px',
-        flexWrap: 'wrap',
-      }}>
-        <select
-          value={filterPipeline}
-          onChange={e => setFilterPipeline(e.target.value)}
-          style={selectStyle}
-        >
+      <div style={{ backgroundColor: '#16213e', borderRadius: '12px', border: '1px solid #2a2a45', padding: '16px 20px', marginBottom: '20px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+        <select value={filterPipeline} onChange={e => setFilterPipeline(e.target.value)} style={selectStyle}>
           {view === 'list' && <option value="">{t('allPipelines')}</option>}
-          {pipelines.map(p => (
-            <option key={p.id} value={p.id}>{p.name}</option>
-          ))}
+          {pipelines.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
-
-        <select
-          value={filterStatus}
-          onChange={e => setFilterStatus(e.target.value)}
-          style={selectStyle}
-        >
+        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={selectStyle}>
           <option value="">{t('allStatuses')}</option>
           <option value="OPEN">{t('status.OPEN')}</option>
           <option value="WON">{t('status.WON')}</option>
@@ -232,12 +172,170 @@ export default function LeadsPage() {
       ) : error ? (
         <ErrorState message={error} />
       ) : view === 'kanban' ? (
-        <KanbanView leads={leads} stages={stages} pipelines={pipelines} fieldConfigs={fieldConfigs} onLeadMoved={moveLead} t={t} />
+        <KanbanView leads={leads} stages={stages} pipelines={pipelines} fieldConfigs={fieldConfigs} onLeadMoved={moveLead} onLeadOpen={setSelectedLead} t={t} />
       ) : leads.length === 0 ? (
         <EmptyState t={t} />
       ) : (
-        <ListView leads={leads} pipelines={pipelines} fieldConfigs={fieldConfigs} t={t} />
+        <ListView leads={leads} pipelines={pipelines} fieldConfigs={fieldConfigs} onLeadOpen={setSelectedLead} t={t} />
       )}
+    </div>
+  )
+}
+
+// ── Lead detail modal ──────────────────────────────────────────────────────────
+
+function LeadDetailModal({ lead, stages, pipelines, fieldConfigs, t, onClose }: {
+  lead: Lead
+  stages: Stage[]
+  pipelines: Pipeline[]
+  fieldConfigs: LeadFieldConfig[]
+  t: ReturnType<typeof useTranslations<'leads'>>
+  onClose: () => void
+}) {
+  const pipeline = pipelines.find(p => p.id === lead.pipelineId)
+  const stage = stages.find(s => s.id === lead.stageId)
+  const stageColor = expandHex(stage?.color ?? '#6c63ff')
+  const statusStyle = statusColors[lead.status] ?? { bg: 'transparent', color: '#8888aa' }
+
+  const formattedValue = lead.value != null
+    ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lead.value)
+    : null
+
+  const activeCustomFields = fieldConfigs.filter(f => f.isActive && f.key !== 'value')
+
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '16px' }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div style={{
+        backgroundColor: '#16213e', borderRadius: '16px', border: '1px solid #2a2a45',
+        width: '560px', maxWidth: '100%', maxHeight: '90vh',
+        display: 'flex', flexDirection: 'column', overflow: 'hidden',
+      }}>
+        {/* Header */}
+        <div style={{ padding: '24px 24px 0', borderBottom: '1px solid #2a2a45', paddingBottom: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
+            <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#e8e8f0', lineHeight: 1.3, flex: 1 }}>
+              {lead.name}
+            </h2>
+            <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#8888aa', cursor: 'pointer', fontSize: '22px', lineHeight: 1, flexShrink: 0, padding: '2px 4px' }}>
+              ×
+            </button>
+          </div>
+
+          {/* Status + stage row */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '12px', flexWrap: 'wrap' }}>
+            <span style={{
+              backgroundColor: statusStyle.bg, color: statusStyle.color,
+              borderRadius: '6px', padding: '4px 12px', fontSize: '12px', fontWeight: 600,
+            }}>
+              {t(`status.${lead.status}` as Parameters<typeof t>[0])}
+            </span>
+            {stage && (
+              <span style={{
+                backgroundColor: `${stageColor}22`, color: stageColor,
+                border: `1px solid ${stageColor}55`,
+                borderRadius: '6px', padding: '4px 12px', fontSize: '12px', fontWeight: 600,
+              }}>
+                {stage.name}
+              </span>
+            )}
+            {pipeline && (
+              <span style={{ fontSize: '12px', color: '#8888aa' }}>
+                {pipeline.name}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Body */}
+        <div style={{ padding: '20px 24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+
+          {/* Value */}
+          {formattedValue && (
+            <Section label={t('value')}>
+              <span style={{ fontSize: '20px', fontWeight: 700, color: '#6bffb8' }}>{formattedValue}</span>
+            </Section>
+          )}
+
+          {/* Custom fields */}
+          {activeCustomFields.length > 0 && (
+            <Section label={t('detail.fields')}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '10px' }}>
+                {activeCustomFields.map(f => {
+                  const val = lead.customFields?.[f.key]
+                  return (
+                    <div key={f.key} style={{ backgroundColor: '#1a1a2e', borderRadius: '8px', padding: '10px 12px', border: '1px solid #2a2a45' }}>
+                      <p style={{ margin: '0 0 4px', fontSize: '11px', fontWeight: 600, color: '#8888aa', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        {f.label}
+                      </p>
+                      <p style={{ margin: 0, fontSize: '14px', color: val != null ? '#e8e8f0' : '#555570' }}>
+                        {val != null ? String(val) : '—'}
+                      </p>
+                    </div>
+                  )
+                })}
+              </div>
+            </Section>
+          )}
+
+          {/* Tags */}
+          {lead.tags && lead.tags.length > 0 && (
+            <Section label={t('detail.tags')}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                {lead.tags.map((tag) => (
+                  <span key={tag} style={{
+                    backgroundColor: 'rgba(108,99,255,0.15)', color: '#6c63ff',
+                    border: '1px solid rgba(108,99,255,0.4)',
+                    borderRadius: '20px', padding: '3px 12px', fontSize: '12px', fontWeight: 500,
+                  }}>
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </Section>
+          )}
+
+          {/* Dates */}
+          <Section label={t('detail.info')}>
+            <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
+              <DateField label={t('createdAt')} value={lead.createdAt} />
+              <DateField label={t('detail.updatedAt')} value={lead.updatedAt} />
+            </div>
+          </Section>
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: '16px 24px', borderTop: '1px solid #2a2a45' }}>
+          <button onClick={onClose} style={{
+            width: '100%', padding: '10px', borderRadius: '8px',
+            border: '1px solid #2a2a45', background: 'none',
+            color: '#8888aa', fontSize: '14px', cursor: 'pointer',
+          }}>
+            {t('detail.close')}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Section({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <p style={{ margin: '0 0 8px', fontSize: '11px', fontWeight: 600, color: '#8888aa', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</p>
+      {children}
+    </div>
+  )
+}
+
+function DateField({ label, value }: { label: string; value: string }) {
+  const formatted = new Date(value).toLocaleString('pt-BR', { dateStyle: 'medium', timeStyle: 'short' })
+  return (
+    <div>
+      <p style={{ margin: '0 0 2px', fontSize: '11px', color: '#8888aa' }}>{label}</p>
+      <p style={{ margin: 0, fontSize: '13px', color: '#c0c0d8' }}>{formatted}</p>
     </div>
   )
 }
@@ -245,26 +343,14 @@ export default function LeadsPage() {
 // ── View toggle ────────────────────────────────────────────────────────────────
 
 function ViewToggleButton({ active, onClick, title, icon }: {
-  active: boolean
-  onClick: () => void
-  title: string
-  icon: React.ReactNode
+  active: boolean; onClick: () => void; title: string; icon: React.ReactNode
 }) {
   return (
-    <button
-      onClick={onClick}
-      title={title}
-      style={{
-        background: active ? '#6c63ff' : 'none',
-        border: 'none',
-        color: active ? '#fff' : '#8888aa',
-        padding: '8px 12px',
-        cursor: 'pointer',
-        display: 'flex',
-        alignItems: 'center',
-        transition: 'background 0.15s',
-      }}
-    >
+    <button onClick={onClick} title={title} style={{
+      background: active ? '#6c63ff' : 'none', border: 'none',
+      color: active ? '#fff' : '#8888aa', padding: '8px 12px',
+      cursor: 'pointer', display: 'flex', alignItems: 'center', transition: 'background 0.15s',
+    }}>
       {icon}
     </button>
   )
@@ -278,13 +364,12 @@ interface KanbanViewProps {
   pipelines: Pipeline[]
   fieldConfigs: LeadFieldConfig[]
   onLeadMoved: (leadId: string, targetStageId: string) => void
+  onLeadOpen: (lead: Lead) => void
   t: ReturnType<typeof useTranslations<'leads'>>
 }
 
-function KanbanView({ leads, stages, fieldConfigs, onLeadMoved, t }: KanbanViewProps) {
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-  )
+function KanbanView({ leads, stages, fieldConfigs, onLeadMoved, onLeadOpen, t }: KanbanViewProps) {
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
   const [activeLead, setActiveLead] = useState<Lead | null>(null)
 
   function handleDragStart(event: DragStartEvent) {
@@ -312,19 +397,14 @@ function KanbanView({ leads, stages, fieldConfigs, onLeadMoved, t }: KanbanViewP
 
   return (
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-      <div style={{
-        display: 'flex',
-        gap: '16px',
-        overflowX: 'auto',
-        paddingBottom: '16px',
-        alignItems: 'flex-start',
-      }}>
+      <div style={{ display: 'flex', gap: '16px', overflowX: 'auto', paddingBottom: '16px', alignItems: 'flex-start' }}>
         {stages.map(stage => (
           <KanbanColumn
             key={stage.id}
             stage={stage}
             leads={leads.filter(l => l.stageId === stage.id)}
             fieldConfigs={fieldConfigs}
+            onLeadOpen={onLeadOpen}
             t={t}
           />
         ))}
@@ -336,81 +416,68 @@ function KanbanView({ leads, stages, fieldConfigs, onLeadMoved, t }: KanbanViewP
   )
 }
 
-function KanbanColumn({ stage, leads, fieldConfigs, t }: {
-  stage: Stage
-  leads: Lead[]
-  fieldConfigs: LeadFieldConfig[]
-  t: ReturnType<typeof useTranslations<'leads'>>
+function KanbanColumn({ stage, leads, fieldConfigs, onLeadOpen, t }: {
+  stage: Stage; leads: Lead[]; fieldConfigs: LeadFieldConfig[]
+  onLeadOpen: (lead: Lead) => void; t: ReturnType<typeof useTranslations<'leads'>>
 }) {
   const { isOver, setNodeRef } = useDroppable({ id: stage.id })
   const color = expandHex(stage.color ?? '#6c63ff')
 
   return (
-    <div
-      ref={setNodeRef}
-      style={{
-        width: '260px',
-        flexShrink: 0,
-        backgroundColor: isOver ? `${color}22` : `${color}12`,
-        border: `1px solid ${isOver ? color : `${color}55`}`,
-        borderRadius: '12px',
-        transition: 'background 0.15s, border-color 0.15s',
-        overflow: 'hidden',
-      }}
-    >
-      {/* Column header */}
-      <div style={{
-        padding: '12px 14px',
-        borderBottom: `1px solid ${color}40`,
-        backgroundColor: `${color}18`,
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-      }}>
+    <div ref={setNodeRef} style={{
+      width: '260px', flexShrink: 0,
+      backgroundColor: isOver ? `${color}22` : `${color}12`,
+      border: `1px solid ${isOver ? color : `${color}55`}`,
+      borderRadius: '12px', transition: 'background 0.15s, border-color 0.15s', overflow: 'hidden',
+    }}>
+      <div style={{ padding: '12px 14px', borderBottom: `1px solid ${color}40`, backgroundColor: `${color}18`, display: 'flex', alignItems: 'center', gap: '8px' }}>
         <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: color, flexShrink: 0 }} />
         <span style={{ fontWeight: 600, fontSize: '13px', color: '#e8e8f0', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {stage.name}
         </span>
-        <span style={{
-          backgroundColor: `${color}30`,
-          color: color,
-          borderRadius: '10px',
-          padding: '1px 7px',
-          fontSize: '11px',
-          fontWeight: 600,
-          flexShrink: 0,
-        }}>
+        <span style={{ backgroundColor: `${color}30`, color, borderRadius: '10px', padding: '1px 7px', fontSize: '11px', fontWeight: 600, flexShrink: 0 }}>
           {leads.length}
         </span>
       </div>
-
-      {/* Cards */}
       <div style={{ padding: '8px', display: 'flex', flexDirection: 'column', gap: '6px', minHeight: '80px' }}>
         {leads.map(lead => (
-          <DraggableLead key={lead.id} lead={lead} fieldConfigs={fieldConfigs} t={t} />
+          <DraggableLead key={lead.id} lead={lead} fieldConfigs={fieldConfigs} onOpen={onLeadOpen} t={t} />
         ))}
       </div>
     </div>
   )
 }
 
-function DraggableLead({ lead, fieldConfigs, t }: {
-  lead: Lead
-  fieldConfigs: LeadFieldConfig[]
-  t: ReturnType<typeof useTranslations<'leads'>>
+function DraggableLead({ lead, fieldConfigs, onOpen, t }: {
+  lead: Lead; fieldConfigs: LeadFieldConfig[]
+  onOpen: (lead: Lead) => void; t: ReturnType<typeof useTranslations<'leads'>>
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: lead.id })
+  const startPosRef = useRef<{ x: number; y: number } | null>(null)
+  const hasDraggedRef = useRef(false)
+
+  // Capture dnd-kit's onPointerDown so we can call it alongside our own
+  const dndPointerDown = (listeners as any)?.onPointerDown as ((e: React.PointerEvent) => void) | undefined
 
   return (
     <div
       ref={setNodeRef}
       {...attributes}
       {...listeners}
-      style={{
-        transform: transform ? `translate(${transform.x}px, ${transform.y}px)` : undefined,
-        opacity: isDragging ? 0.3 : 1,
-        touchAction: 'none',
+      onPointerDown={(e) => {
+        startPosRef.current = { x: e.clientX, y: e.clientY }
+        hasDraggedRef.current = false
+        dndPointerDown?.(e)
       }}
+      onPointerMove={(e) => {
+        if (!startPosRef.current) return
+        const d = Math.hypot(e.clientX - startPosRef.current.x, e.clientY - startPosRef.current.y)
+        if (d > 5) hasDraggedRef.current = true
+      }}
+      onClick={() => {
+        if (!hasDraggedRef.current) onOpen(lead)
+      }}
+      style={{ transform: transform ? `translate(${transform.x}px, ${transform.y}px)` : undefined, opacity: isDragging ? 0.3 : 1, touchAction: 'none' }}
     >
       <LeadKanbanCard lead={lead} fieldConfigs={fieldConfigs} t={t} />
     </div>
@@ -418,53 +485,35 @@ function DraggableLead({ lead, fieldConfigs, t }: {
 }
 
 function LeadKanbanCard({ lead, fieldConfigs, t, isDragging = false }: {
-  lead: Lead
-  fieldConfigs: LeadFieldConfig[]
-  t: ReturnType<typeof useTranslations<'leads'>>
-  isDragging?: boolean
+  lead: Lead; fieldConfigs: LeadFieldConfig[]
+  t: ReturnType<typeof useTranslations<'leads'>>; isDragging?: boolean
 }) {
   const statusStyle = statusColors[lead.status] ?? { bg: 'transparent', color: '#8888aa' }
   const formattedValue = lead.value != null
     ? new Intl.NumberFormat(undefined, { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(lead.value)
     : null
-
-  const visibleCustomFields = fieldConfigs
-    .filter(f => f.isActive && f.key !== 'value' && lead.customFields?.[f.key] != null)
-    .slice(0, 2)
+  const visibleCustomFields = fieldConfigs.filter(f => f.isActive && f.key !== 'value' && lead.customFields?.[f.key] != null).slice(0, 2)
 
   return (
     <div style={{
-      backgroundColor: '#1a1a2e',
-      border: '1px solid #2a2a45',
-      borderRadius: '8px',
-      padding: '10px 12px',
-      cursor: isDragging ? 'grabbing' : 'grab',
+      backgroundColor: '#1a1a2e', border: '1px solid #2a2a45', borderRadius: '8px', padding: '10px 12px',
+      cursor: isDragging ? 'grabbing' : 'pointer',
       boxShadow: isDragging ? '0 8px 24px rgba(0,0,0,0.5)' : 'none',
       userSelect: 'none',
+      transition: 'border-color 0.12s',
     }}>
-      <p style={{ margin: '0 0 8px', fontWeight: 600, fontSize: '13px', color: '#e8e8f0', lineHeight: 1.4 }}>
-        {lead.name}
-      </p>
+      <p style={{ margin: '0 0 8px', fontWeight: 600, fontSize: '13px', color: '#e8e8f0', lineHeight: 1.4 }}>{lead.name}</p>
       {visibleCustomFields.map(f => (
         <p key={f.key} style={{ margin: '0 0 4px', fontSize: '11px', color: '#8888aa' }}>
           <span style={{ fontWeight: 600 }}>{f.label}:</span> {String(lead.customFields![f.key])}
         </p>
       ))}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-        {formattedValue ? (
-          <span style={{ fontSize: '12px', fontWeight: 600, color: '#6bffb8' }}>{formattedValue}</span>
-        ) : (
-          <span style={{ fontSize: '12px', color: '#8888aa' }}>{t('noValue')}</span>
-        )}
-        <span style={{
-          backgroundColor: statusStyle.bg,
-          color: statusStyle.color,
-          borderRadius: '4px',
-          padding: '2px 7px',
-          fontSize: '11px',
-          fontWeight: 600,
-          flexShrink: 0,
-        }}>
+        {formattedValue
+          ? <span style={{ fontSize: '12px', fontWeight: 600, color: '#6bffb8' }}>{formattedValue}</span>
+          : <span style={{ fontSize: '12px', color: '#8888aa' }}>{t('noValue')}</span>
+        }
+        <span style={{ backgroundColor: statusStyle.bg, color: statusStyle.color, borderRadius: '4px', padding: '2px 7px', fontSize: '11px', fontWeight: 600, flexShrink: 0 }}>
           {t(`status.${lead.status}` as Parameters<typeof t>[0])}
         </span>
       </div>
@@ -474,58 +523,47 @@ function LeadKanbanCard({ lead, fieldConfigs, t, isDragging = false }: {
 
 // ── List view ──────────────────────────────────────────────────────────────────
 
-function ListView({ leads, pipelines, fieldConfigs, t }: {
-  leads: Lead[]
-  pipelines: Pipeline[]
-  fieldConfigs: LeadFieldConfig[]
-  t: ReturnType<typeof useTranslations<'leads'>>
+function ListView({ leads, pipelines, fieldConfigs, onLeadOpen, t }: {
+  leads: Lead[]; pipelines: Pipeline[]; fieldConfigs: LeadFieldConfig[]
+  onLeadOpen: (lead: Lead) => void; t: ReturnType<typeof useTranslations<'leads'>>
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
       {leads.map(lead => (
-        <LeadListCard key={lead.id} lead={lead} pipelines={pipelines} fieldConfigs={fieldConfigs} t={t} />
+        <LeadListCard key={lead.id} lead={lead} pipelines={pipelines} fieldConfigs={fieldConfigs} onOpen={onLeadOpen} t={t} />
       ))}
     </div>
   )
 }
 
-function LeadListCard({ lead, pipelines, fieldConfigs, t }: {
-  lead: Lead
-  pipelines: Pipeline[]
-  fieldConfigs: LeadFieldConfig[]
-  t: ReturnType<typeof useTranslations<'leads'>>
+function LeadListCard({ lead, pipelines, fieldConfigs, onOpen, t }: {
+  lead: Lead; pipelines: Pipeline[]; fieldConfigs: LeadFieldConfig[]
+  onOpen: (lead: Lead) => void; t: ReturnType<typeof useTranslations<'leads'>>
 }) {
+  const [hovered, setHovered] = useState(false)
   const pipeline = pipelines.find(p => p.id === lead.pipelineId)
   const statusStyle = statusColors[lead.status] ?? { bg: 'transparent', color: '#8888aa' }
-  const formattedDate = new Date(lead.createdAt).toLocaleDateString(undefined, {
-    year: 'numeric', month: 'short', day: 'numeric',
-  })
+  const formattedDate = new Date(lead.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
   const formattedValue = lead.value != null
     ? new Intl.NumberFormat(undefined, { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(lead.value)
     : null
-
-  const visibleCustomFields = fieldConfigs
-    .filter(f => f.isActive && f.key !== 'value' && lead.customFields?.[f.key] != null)
-    .slice(0, 2)
+  const visibleCustomFields = fieldConfigs.filter(f => f.isActive && f.key !== 'value' && lead.customFields?.[f.key] != null).slice(0, 2)
 
   return (
-    <div style={{
-      backgroundColor: '#16213e',
-      borderRadius: '12px',
-      border: '1px solid #2a2a45',
-      padding: '16px 20px',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '16px',
-      flexWrap: 'wrap',
-    }}>
+    <div
+      onClick={() => onOpen(lead)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        backgroundColor: '#16213e', borderRadius: '12px',
+        border: `1px solid ${hovered ? '#3a3a5a' : '#2a2a45'}`,
+        padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap',
+        cursor: 'pointer', transition: 'border-color 0.15s',
+      }}
+    >
       <div style={{ flex: 1, minWidth: '160px' }}>
-        <p style={{ margin: 0, fontWeight: 600, fontSize: '14px', color: '#e8e8f0' }}>{lead.name}</p>
-        {pipeline && (
-          <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#8888aa' }}>
-            {t('pipeline')}: {pipeline.name}
-          </p>
-        )}
+        <p style={{ margin: 0, fontWeight: 600, fontSize: '14px', color: hovered ? '#a09fff' : '#e8e8f0', transition: 'color 0.15s' }}>{lead.name}</p>
+        {pipeline && <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#8888aa' }}>{t('pipeline')}: {pipeline.name}</p>}
         {visibleCustomFields.map(f => (
           <p key={f.key} style={{ margin: '2px 0 0', fontSize: '12px', color: '#8888aa' }}>
             {f.label}: {String(lead.customFields![f.key])}
@@ -537,15 +575,7 @@ function LeadListCard({ lead, pipelines, fieldConfigs, t }: {
           {formattedValue ?? <span style={{ color: '#8888aa', fontWeight: 400 }}>{t('noValue')}</span>}
         </p>
       </div>
-      <div style={{
-        backgroundColor: statusStyle.bg,
-        color: statusStyle.color,
-        borderRadius: '6px',
-        padding: '4px 10px',
-        fontSize: '12px',
-        fontWeight: 600,
-        flexShrink: 0,
-      }}>
+      <div style={{ backgroundColor: statusStyle.bg, color: statusStyle.color, borderRadius: '6px', padding: '4px 10px', fontSize: '12px', fontWeight: 600, flexShrink: 0 }}>
         {t(`status.${lead.status}` as Parameters<typeof t>[0])}
       </div>
       <p style={{ margin: 0, fontSize: '12px', color: '#8888aa', flexShrink: 0 }}>{formattedDate}</p>
@@ -560,10 +590,7 @@ function LoadingState({ view }: { view: View }) {
     return (
       <div style={{ display: 'flex', gap: '16px' }}>
         {[1, 2, 3, 4].map(i => (
-          <div key={i} style={{
-            width: '260px', flexShrink: 0, backgroundColor: '#16213e',
-            borderRadius: '12px', border: '1px solid #2a2a45', height: '200px', opacity: 0.4,
-          }} />
+          <div key={i} style={{ width: '260px', flexShrink: 0, backgroundColor: '#16213e', borderRadius: '12px', border: '1px solid #2a2a45', height: '200px', opacity: 0.4 }} />
         ))}
       </div>
     )
@@ -571,10 +598,7 @@ function LoadingState({ view }: { view: View }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
       {[1, 2, 3].map(i => (
-        <div key={i} style={{
-          backgroundColor: '#16213e', borderRadius: '12px',
-          border: '1px solid #2a2a45', padding: '16px 20px', height: '64px', opacity: 0.4,
-        }} />
+        <div key={i} style={{ backgroundColor: '#16213e', borderRadius: '12px', border: '1px solid #2a2a45', padding: '16px 20px', height: '64px', opacity: 0.4 }} />
       ))}
     </div>
   )
@@ -582,12 +606,7 @@ function LoadingState({ view }: { view: View }) {
 
 function ErrorState({ message }: { message: string }) {
   return (
-    <div style={{
-      backgroundColor: 'rgba(255, 107, 107, 0.1)',
-      border: '1px solid rgba(255, 107, 107, 0.3)',
-      borderRadius: '12px', padding: '24px', textAlign: 'center',
-      color: '#ff6b6b', fontSize: '14px',
-    }}>
+    <div style={{ backgroundColor: 'rgba(255, 107, 107, 0.1)', border: '1px solid rgba(255, 107, 107, 0.3)', borderRadius: '12px', padding: '24px', textAlign: 'center', color: '#ff6b6b', fontSize: '14px' }}>
       {message}
     </div>
   )
@@ -595,16 +614,10 @@ function ErrorState({ message }: { message: string }) {
 
 function EmptyState({ t }: { t: ReturnType<typeof useTranslations<'leads'>> }) {
   return (
-    <div style={{
-      padding: '48px 40px', backgroundColor: '#16213e',
-      borderRadius: '16px', border: '1px dashed #2a2a45',
-      textAlign: 'center', color: '#8888aa',
-    }}>
+    <div style={{ padding: '48px 40px', backgroundColor: '#16213e', borderRadius: '16px', border: '1px dashed #2a2a45', textAlign: 'center', color: '#8888aa' }}>
       <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ marginBottom: '16px', opacity: 0.4 }}>
-        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-        <circle cx="9" cy="7" r="4" />
-        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
       </svg>
       <p style={{ margin: '0 0 6px', fontSize: '15px', fontWeight: 600, color: '#e8e8f0' }}>{t('empty')}</p>
       <p style={{ margin: 0, fontSize: '13px' }}>{t('emptyDesc')}</p>
@@ -614,7 +627,6 @@ function EmptyState({ t }: { t: ReturnType<typeof useTranslations<'leads'>> }) {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/** Expands #rgb shorthand to #rrggbb so hex-alpha concatenation works correctly. */
 function expandHex(color: string): string {
   if (/^#[0-9a-fA-F]{3}$/.test(color)) {
     return `#${color[1]}${color[1]}${color[2]}${color[2]}${color[3]}${color[3]}`
@@ -625,23 +637,9 @@ function expandHex(color: string): string {
 // ── Icons ──────────────────────────────────────────────────────────────────────
 
 function KanbanIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="3" width="7" height="18" rx="1" />
-      <rect x="14" y="3" width="7" height="12" rx="1" />
-    </svg>
-  )
+  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="18" rx="1" /><rect x="14" y="3" width="7" height="12" rx="1" /></svg>
 }
 
 function ListIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="8" y1="6" x2="21" y2="6" />
-      <line x1="8" y1="12" x2="21" y2="12" />
-      <line x1="8" y1="18" x2="21" y2="18" />
-      <line x1="3" y1="6" x2="3.01" y2="6" />
-      <line x1="3" y1="12" x2="3.01" y2="12" />
-      <line x1="3" y1="18" x2="3.01" y2="18" />
-    </svg>
-  )
+  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></svg>
 }

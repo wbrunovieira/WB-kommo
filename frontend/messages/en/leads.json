@@ -16,6 +16,13 @@
     "kanbanView": "Kanban",
     "listView": "List",
     "noStages": "No stages found for this pipeline",
+    "detail": {
+      "fields": "Fields",
+      "tags": "Tags",
+      "info": "Information",
+      "updatedAt": "Updated at",
+      "close": "Close"
+    },
     "modal": {
       "title": "New Lead",
       "name": "Lead name",

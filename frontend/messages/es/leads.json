@@ -16,6 +16,13 @@
     "kanbanView": "Kanban",
     "listView": "Lista",
     "noStages": "No se encontraron etapas para este pipeline",
+    "detail": {
+      "fields": "Campos",
+      "tags": "Etiquetas",
+      "info": "Información",
+      "updatedAt": "Actualizado el",
+      "close": "Cerrar"
+    },
     "modal": {
       "title": "Nuevo Lead",
       "name": "Nombre del lead",
