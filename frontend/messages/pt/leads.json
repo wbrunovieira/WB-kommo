@@ -23,6 +23,23 @@
       "updatedAt": "Atualizado em",
       "close": "Fechar"
     },
+    "edit": {
+      "title": "Editar Lead",
+      "stage": "Etapa",
+      "status": "Status",
+      "tags": "Tags",
+      "tagsPlaceholder": "Ex: vip, urgente (separadas por vírgula)",
+      "save": "Salvar alterações",
+      "saving": "Salvando..."
+    },
+    "delete": {
+      "title": "Excluir Lead",
+      "confirm": "Tem certeza que deseja excluir \"{name}\"? Esta ação não pode ser desfeita.",
+      "confirm_btn": "Excluir",
+      "deleting": "Excluindo..."
+    },
+    "editError": "Erro ao salvar alterações. Tente novamente.",
+    "deleteError": "Erro ao excluir o lead. Tente novamente.",
     "modal": {
       "title": "Novo Lead",
       "name": "Nome do lead",

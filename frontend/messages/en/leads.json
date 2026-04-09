@@ -23,6 +23,23 @@
       "updatedAt": "Updated at",
       "close": "Close"
     },
+    "edit": {
+      "title": "Edit Lead",
+      "stage": "Stage",
+      "status": "Status",
+      "tags": "Tags",
+      "tagsPlaceholder": "e.g. vip, urgent (comma-separated)",
+      "save": "Save changes",
+      "saving": "Saving..."
+    },
+    "delete": {
+      "title": "Delete Lead",
+      "confirm": "Are you sure you want to delete \"{name}\"? This action cannot be undone.",
+      "confirm_btn": "Delete",
+      "deleting": "Deleting..."
+    },
+    "editError": "Error saving changes. Please try again.",
+    "deleteError": "Error deleting lead. Please try again.",
     "modal": {
       "title": "New Lead",
       "name": "Lead name",

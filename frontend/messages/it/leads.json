@@ -23,6 +23,23 @@
       "updatedAt": "Aggiornato il",
       "close": "Chiudi"
     },
+    "edit": {
+      "title": "Modifica Lead",
+      "stage": "Fase",
+      "status": "Stato",
+      "tags": "Tag",
+      "tagsPlaceholder": "Es. vip, urgente (separate da virgola)",
+      "save": "Salva modifiche",
+      "saving": "Salvataggio..."
+    },
+    "delete": {
+      "title": "Elimina Lead",
+      "confirm": "Sei sicuro di voler eliminare \"{name}\"? Questa azione non può essere annullata.",
+      "confirm_btn": "Elimina",
+      "deleting": "Eliminazione..."
+    },
+    "editError": "Errore nel salvataggio delle modifiche. Riprova.",
+    "deleteError": "Errore nell'eliminazione del lead. Riprova.",
     "modal": {
       "title": "Nuovo Lead",
       "name": "Nome del lead",
