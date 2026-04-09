@@ -7,4 +7,8 @@ export class UpdateLeadDto extends PartialType(CreateLeadDto) {
   @IsOptional()
   @IsEnum(['OPEN', 'WON', 'LOST'])
   status?: 'OPEN' | 'WON' | 'LOST'
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  customFields?: Record<string, unknown>
 }

@@ -21,6 +21,7 @@ export interface UpdateLeadRequest {
     status?: LeadStatus
     assignedToId?: string
     tags?: string[]
+    customFields?: Record<string, unknown>
   }
 }
 
@@ -78,6 +79,7 @@ export class UpdateLeadUseCase {
       else if (updates.status === 'LOST') lead.markLost()
       else if (updates.status === 'OPEN') lead.reopen()
     }
+    if (updates.customFields !== undefined) lead.updateCustomFields(updates.customFields)
 
     const saveResult = await this.leadRepo.save(lead)
     if (saveResult.isLeft()) return left(saveResult.value)

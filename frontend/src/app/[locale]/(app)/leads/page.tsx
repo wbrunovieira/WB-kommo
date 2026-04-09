@@ -14,7 +14,7 @@ import {
   useSensors,
 } from '@dnd-kit/core'
 import { getUser, getAccessToken } from '@/lib/auth'
-import { getLeads, getPipelines, getStages, updateLead, Lead, Pipeline, Stage } from '@/lib/api'
+import { getLeads, getPipelines, getStages, updateLead, getLeadFieldConfigs, Lead, LeadFieldConfig, Pipeline, Stage } from '@/lib/api'
 import { CreateLeadModal } from '@/components/create-lead-modal'
 
 type View = 'kanban' | 'list'
@@ -42,6 +42,7 @@ export default function LeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([])
   const [pipelines, setPipelines] = useState<Pipeline[]>([])
   const [stages, setStages] = useState<Stage[]>([])
+  const [fieldConfigs, setFieldConfigs] = useState<LeadFieldConfig[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingStages, setLoadingStages] = useState(false)
   const [error, setError] = useState('')
@@ -50,11 +51,12 @@ export default function LeadsPage() {
   const [showModal, setShowModal] = useState(false)
   const user = getUser()
 
-  // Load pipelines on mount
+  // Load pipelines and field configs on mount
   useEffect(() => {
     const token = getAccessToken()
     if (!token) return
     getPipelines(token).then(setPipelines).catch(() => {})
+    getLeadFieldConfigs(token).then(setFieldConfigs).catch(() => {})
   }, [])
 
   // Auto-select first pipeline in kanban mode when none is selected
@@ -122,6 +124,7 @@ export default function LeadsPage() {
       {showModal && (
         <CreateLeadModal
           pipelines={pipelines}
+          fieldConfigs={fieldConfigs}
           onClose={() => setShowModal(false)}
           onCreated={() => { setShowModal(false); refreshLeads() }}
         />
@@ -229,11 +232,11 @@ export default function LeadsPage() {
       ) : error ? (
         <ErrorState message={error} />
       ) : view === 'kanban' ? (
-        <KanbanView leads={leads} stages={stages} pipelines={pipelines} onLeadMoved={moveLead} t={t} />
+        <KanbanView leads={leads} stages={stages} pipelines={pipelines} fieldConfigs={fieldConfigs} onLeadMoved={moveLead} t={t} />
       ) : leads.length === 0 ? (
         <EmptyState t={t} />
       ) : (
-        <ListView leads={leads} pipelines={pipelines} t={t} />
+        <ListView leads={leads} pipelines={pipelines} fieldConfigs={fieldConfigs} t={t} />
       )}
     </div>
   )
@@ -273,11 +276,12 @@ interface KanbanViewProps {
   leads: Lead[]
   stages: Stage[]
   pipelines: Pipeline[]
+  fieldConfigs: LeadFieldConfig[]
   onLeadMoved: (leadId: string, targetStageId: string) => void
   t: ReturnType<typeof useTranslations<'leads'>>
 }
 
-function KanbanView({ leads, stages, onLeadMoved, t }: KanbanViewProps) {
+function KanbanView({ leads, stages, fieldConfigs, onLeadMoved, t }: KanbanViewProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
   )
@@ -320,20 +324,22 @@ function KanbanView({ leads, stages, onLeadMoved, t }: KanbanViewProps) {
             key={stage.id}
             stage={stage}
             leads={leads.filter(l => l.stageId === stage.id)}
+            fieldConfigs={fieldConfigs}
             t={t}
           />
         ))}
       </div>
       <DragOverlay>
-        {activeLead && <LeadKanbanCard lead={activeLead} t={t} isDragging />}
+        {activeLead && <LeadKanbanCard lead={activeLead} fieldConfigs={fieldConfigs} t={t} isDragging />}
       </DragOverlay>
     </DndContext>
   )
 }
 
-function KanbanColumn({ stage, leads, t }: {
+function KanbanColumn({ stage, leads, fieldConfigs, t }: {
   stage: Stage
   leads: Lead[]
+  fieldConfigs: LeadFieldConfig[]
   t: ReturnType<typeof useTranslations<'leads'>>
 }) {
   const { isOver, setNodeRef } = useDroppable({ id: stage.id })
@@ -381,15 +387,16 @@ function KanbanColumn({ stage, leads, t }: {
       {/* Cards */}
       <div style={{ padding: '8px', display: 'flex', flexDirection: 'column', gap: '6px', minHeight: '80px' }}>
         {leads.map(lead => (
-          <DraggableLead key={lead.id} lead={lead} t={t} />
+          <DraggableLead key={lead.id} lead={lead} fieldConfigs={fieldConfigs} t={t} />
         ))}
       </div>
     </div>
   )
 }
 
-function DraggableLead({ lead, t }: {
+function DraggableLead({ lead, fieldConfigs, t }: {
   lead: Lead
+  fieldConfigs: LeadFieldConfig[]
   t: ReturnType<typeof useTranslations<'leads'>>
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: lead.id })
@@ -405,13 +412,14 @@ function DraggableLead({ lead, t }: {
         touchAction: 'none',
       }}
     >
-      <LeadKanbanCard lead={lead} t={t} />
+      <LeadKanbanCard lead={lead} fieldConfigs={fieldConfigs} t={t} />
     </div>
   )
 }
 
-function LeadKanbanCard({ lead, t, isDragging = false }: {
+function LeadKanbanCard({ lead, fieldConfigs, t, isDragging = false }: {
   lead: Lead
+  fieldConfigs: LeadFieldConfig[]
   t: ReturnType<typeof useTranslations<'leads'>>
   isDragging?: boolean
 }) {
@@ -419,6 +427,10 @@ function LeadKanbanCard({ lead, t, isDragging = false }: {
   const formattedValue = lead.value != null
     ? new Intl.NumberFormat(undefined, { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(lead.value)
     : null
+
+  const visibleCustomFields = fieldConfigs
+    .filter(f => f.isActive && f.key !== 'value' && lead.customFields?.[f.key] != null)
+    .slice(0, 2)
 
   return (
     <div style={{
@@ -433,6 +445,11 @@ function LeadKanbanCard({ lead, t, isDragging = false }: {
       <p style={{ margin: '0 0 8px', fontWeight: 600, fontSize: '13px', color: '#e8e8f0', lineHeight: 1.4 }}>
         {lead.name}
       </p>
+      {visibleCustomFields.map(f => (
+        <p key={f.key} style={{ margin: '0 0 4px', fontSize: '11px', color: '#8888aa' }}>
+          <span style={{ fontWeight: 600 }}>{f.label}:</span> {String(lead.customFields![f.key])}
+        </p>
+      ))}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
         {formattedValue ? (
           <span style={{ fontSize: '12px', fontWeight: 600, color: '#6bffb8' }}>{formattedValue}</span>
@@ -457,23 +474,25 @@ function LeadKanbanCard({ lead, t, isDragging = false }: {
 
 // ── List view ──────────────────────────────────────────────────────────────────
 
-function ListView({ leads, pipelines, t }: {
+function ListView({ leads, pipelines, fieldConfigs, t }: {
   leads: Lead[]
   pipelines: Pipeline[]
+  fieldConfigs: LeadFieldConfig[]
   t: ReturnType<typeof useTranslations<'leads'>>
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
       {leads.map(lead => (
-        <LeadListCard key={lead.id} lead={lead} pipelines={pipelines} t={t} />
+        <LeadListCard key={lead.id} lead={lead} pipelines={pipelines} fieldConfigs={fieldConfigs} t={t} />
       ))}
     </div>
   )
 }
 
-function LeadListCard({ lead, pipelines, t }: {
+function LeadListCard({ lead, pipelines, fieldConfigs, t }: {
   lead: Lead
   pipelines: Pipeline[]
+  fieldConfigs: LeadFieldConfig[]
   t: ReturnType<typeof useTranslations<'leads'>>
 }) {
   const pipeline = pipelines.find(p => p.id === lead.pipelineId)
@@ -484,6 +503,10 @@ function LeadListCard({ lead, pipelines, t }: {
   const formattedValue = lead.value != null
     ? new Intl.NumberFormat(undefined, { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(lead.value)
     : null
+
+  const visibleCustomFields = fieldConfigs
+    .filter(f => f.isActive && f.key !== 'value' && lead.customFields?.[f.key] != null)
+    .slice(0, 2)
 
   return (
     <div style={{
@@ -503,6 +526,11 @@ function LeadListCard({ lead, pipelines, t }: {
             {t('pipeline')}: {pipeline.name}
           </p>
         )}
+        {visibleCustomFields.map(f => (
+          <p key={f.key} style={{ margin: '2px 0 0', fontSize: '12px', color: '#8888aa' }}>
+            {f.label}: {String(lead.customFields![f.key])}
+          </p>
+        ))}
       </div>
       <div style={{ minWidth: '100px', textAlign: 'right' }}>
         <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: '#e8e8f0' }}>

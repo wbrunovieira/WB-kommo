@@ -130,6 +130,11 @@ export class Lead extends Entity<LeadProps> {
     this.touch()
   }
 
+  updateCustomFields(fields: Record<string, unknown>): void {
+    this.props.customFields = { ...(this.props.customFields ?? {}), ...fields }
+    this.touch()
+  }
+
   private touch(): void {
     this.props.updatedAt = new Date()
   }

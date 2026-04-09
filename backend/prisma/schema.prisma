@@ -23,6 +23,15 @@ enum LeadStatus {
   LOST
 }
 
+enum FieldType {
+  TEXT
+  NUMBER
+  EMAIL
+  PHONE
+  DATE
+  SELECT
+}
+
 enum ActivityType {
   NOTE
   CALL
@@ -72,6 +81,7 @@ model Tenant {
   leads          Lead[]
   pipelines      Pipeline[]
   auditLogs      AuditLog[]
+  leadFieldConfigs LeadFieldConfig[]
 
   @@index([slug])
   @@index([resellerTenantId])
@@ -235,6 +245,27 @@ model Lead {
   @@index([tenantId, pipelineId])
   @@index([tenantId, stageId])
   @@map("leads")
+}
+
+model LeadFieldConfig {
+  id         String    @id @default(uuid())
+  tenantId   String
+  key        String
+  label      String
+  type       FieldType
+  isRequired Boolean   @default(false)
+  isActive   Boolean   @default(true)
+  isBuiltin  Boolean   @default(false)
+  order      Int       @default(0)
+  options    String[]  @default([])
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, key])
+  @@index([tenantId])
+  @@map("lead_field_configs")
 }
 
 model Contact {

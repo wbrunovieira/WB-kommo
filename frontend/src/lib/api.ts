@@ -169,6 +169,7 @@ export interface Lead {
   value?: number
   assignedToId?: string
   tags: string[]
+  customFields?: Record<string, unknown>
   createdAt: string
   updatedAt: string
 }
@@ -188,6 +189,19 @@ export interface Stage {
   color?: string
 }
 
+export interface LeadFieldConfig {
+  id: string
+  tenantId: string
+  key: string
+  label: string
+  type: 'TEXT' | 'NUMBER' | 'EMAIL' | 'PHONE' | 'DATE' | 'SELECT'
+  isRequired: boolean
+  isActive: boolean
+  isBuiltin: boolean
+  order: number
+  options: string[]
+}
+
 export interface CreateLeadPayload {
   name: string
   pipelineId: string
@@ -195,6 +209,7 @@ export interface CreateLeadPayload {
   value?: number
   assignedToId?: string
   tags?: string[]
+  customFields?: Record<string, unknown>
 }
 
 export interface UpdateLeadPayload {
@@ -203,6 +218,7 @@ export interface UpdateLeadPayload {
   value?: number
   status?: string
   tags?: string[]
+  customFields?: Record<string, unknown>
 }
 
 export async function getLeads(
@@ -282,4 +298,36 @@ export async function reorderStages(
   token: string,
 ): Promise<void> {
   return apiFetch<void>(`/pipelines/${pipelineId}/stages/reorder`, { method: 'PATCH', body: JSON.stringify({ order }) }, token)
+}
+
+// ── Lead Field Configs ─────────────────────────────────────────────────────────
+
+export async function getLeadFieldConfigs(token: string): Promise<LeadFieldConfig[]> {
+  return apiFetch<LeadFieldConfig[]>('/lead-field-configs', { method: 'GET' }, token)
+}
+
+export async function createLeadFieldConfig(
+  payload: { label: string; type: string; isRequired?: boolean; options?: string[] },
+  token: string,
+): Promise<LeadFieldConfig> {
+  return apiFetch<LeadFieldConfig>('/lead-field-configs', { method: 'POST', body: JSON.stringify(payload) }, token)
+}
+
+export async function updateLeadFieldConfig(
+  id: string,
+  updates: { label?: string; isActive?: boolean; isRequired?: boolean; order?: number; options?: string[] },
+  token: string,
+): Promise<LeadFieldConfig> {
+  return apiFetch<LeadFieldConfig>(`/lead-field-configs/${id}`, { method: 'PATCH', body: JSON.stringify(updates) }, token)
+}
+
+export async function deleteLeadFieldConfig(id: string, token: string): Promise<void> {
+  return apiFetch<void>(`/lead-field-configs/${id}`, { method: 'DELETE' }, token)
+}
+
+export async function reorderLeadFieldConfigs(
+  order: Array<{ configId: string; order: number }>,
+  token: string,
+): Promise<void> {
+  return apiFetch<void>('/lead-field-configs/reorder', { method: 'PATCH', body: JSON.stringify({ order }) }, token)
 }

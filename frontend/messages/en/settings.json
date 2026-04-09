@@ -1,0 +1,33 @@
+{
+  "settings": {
+    "title": "Settings",
+    "subtitle": "Manage your workspace settings",
+    "cancel": "Cancel",
+    "save": "Save",
+    "saving": "Saving...",
+    "leadFields": {
+      "title": "Lead Fields",
+      "subtitle": "Configure which fields appear on each lead",
+      "addField": "Add Field",
+      "editField": "Edit Field",
+      "fieldLabel": "Field name",
+      "fieldType": "Type",
+      "required": "Required field",
+      "selectOptions": "Options (one per line)",
+      "selectOptionsPlaceholder": "Option 1\nOption 2\nOption 3",
+      "builtin": "built-in",
+      "activate": "Activate",
+      "deactivate": "Deactivate",
+      "edit": "Edit",
+      "delete": "Delete",
+      "types": {
+        "text": "Text",
+        "number": "Number",
+        "email": "E-mail",
+        "phone": "Phone",
+        "date": "Date",
+        "select": "Select"
+      }
+    }
+  }
+}

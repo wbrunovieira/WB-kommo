@@ -20,6 +20,8 @@ import { ILeadRepository } from '@/domain/leads/application/repositories/i-lead.
 import { IPipelineRepository } from '@/domain/pipelines/application/repositories/i-pipeline.repository'
 import { IStageRepository } from '@/domain/pipelines/application/repositories/i-stage.repository'
 import { IPlanRepository } from '@/domain/plans/application/repositories/i-plan.repository'
+import { ILeadFieldConfigRepository } from '@/domain/leads/application/repositories/i-lead-field-config.repository'
+import { PrismaLeadFieldConfigRepository } from '@/infra/database/prisma/repositories/prisma-lead-field-config.repository'
 
 @Module({
   providers: [
@@ -34,6 +36,7 @@ import { IPlanRepository } from '@/domain/plans/application/repositories/i-plan.
     { provide: IPipelineRepository,           useClass: PrismaPipelineRepository },
     { provide: IStageRepository,              useClass: PrismaStageRepository },
     { provide: IPlanRepository,               useClass: PrismaPlanRepository },
+    { provide: ILeadFieldConfigRepository,    useClass: PrismaLeadFieldConfigRepository },
   ],
   exports: [
     PrismaService,
@@ -47,6 +50,7 @@ import { IPlanRepository } from '@/domain/plans/application/repositories/i-plan.
     IPipelineRepository,
     IStageRepository,
     IPlanRepository,
+    ILeadFieldConfigRepository,
   ],
 })
 export class DatabaseModule {}

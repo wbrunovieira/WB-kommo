@@ -10,6 +10,7 @@ export interface LeadHttpResponse {
   status: string
   assignedToId?: string
   tags: string[]
+  customFields?: Record<string, unknown>
   deletedAt?: Date
   deletedByUserId?: string
   createdAt?: Date
@@ -28,6 +29,7 @@ export class LeadPresenter {
       status: lead.status,
       assignedToId: lead.assignedToId,
       tags: lead.tags,
+      customFields: lead.customFields,
       deletedAt: lead.deletedAt,
       deletedByUserId: lead.deletedByUserId,
       createdAt: lead.createdAt,

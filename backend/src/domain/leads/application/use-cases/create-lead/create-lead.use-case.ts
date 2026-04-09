@@ -15,6 +15,7 @@ export interface CreateLeadRequest {
   value?: number
   assignedToId?: string
   tags?: string[]
+  customFields?: Record<string, unknown>
   actorUserId: string
 }
 
@@ -64,6 +65,7 @@ export class CreateLeadUseCase {
       value: req.value,
       assignedToId: req.assignedToId ?? req.actorUserId,
       tags: req.tags,
+      customFields: req.customFields,
     })
 
     // 6. save

@@ -1,0 +1,33 @@
+{
+  "settings": {
+    "title": "Configurações",
+    "subtitle": "Gerencie as configurações do seu workspace",
+    "cancel": "Cancelar",
+    "save": "Salvar",
+    "saving": "Salvando...",
+    "leadFields": {
+      "title": "Campos do Lead",
+      "subtitle": "Configure quais campos aparecerão em cada lead",
+      "addField": "Adicionar Campo",
+      "editField": "Editar Campo",
+      "fieldLabel": "Nome do campo",
+      "fieldType": "Tipo",
+      "required": "Campo obrigatório",
+      "selectOptions": "Opções (uma por linha)",
+      "selectOptionsPlaceholder": "Opção 1\nOpção 2\nOpção 3",
+      "builtin": "padrão",
+      "activate": "Ativar",
+      "deactivate": "Desativar",
+      "edit": "Editar",
+      "delete": "Excluir",
+      "types": {
+        "text": "Texto",
+        "number": "Número",
+        "email": "E-mail",
+        "phone": "Telefone",
+        "date": "Data",
+        "select": "Seleção"
+      }
+    }
+  }
+}

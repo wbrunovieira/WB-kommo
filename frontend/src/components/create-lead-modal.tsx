@@ -3,10 +3,11 @@
 import { useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { getAccessToken } from '@/lib/auth'
-import { createLead, getStages, Pipeline, Stage } from '@/lib/api'
+import { createLead, getStages, LeadFieldConfig, Pipeline, Stage } from '@/lib/api'
 
 interface Props {
   pipelines: Pipeline[]
+  fieldConfigs?: LeadFieldConfig[]
   onClose: () => void
   onCreated: () => void
 }
@@ -33,7 +34,7 @@ const labelStyle: React.CSSProperties = {
   marginBottom: '6px',
 }
 
-export function CreateLeadModal({ pipelines, onClose, onCreated }: Props) {
+export function CreateLeadModal({ pipelines, fieldConfigs = [], onClose, onCreated }: Props) {
   const t = useTranslations('leads')
 
   const [name, setName] = useState('')
@@ -41,8 +42,12 @@ export function CreateLeadModal({ pipelines, onClose, onCreated }: Props) {
   const [stageId, setStageId] = useState('')
   const [stages, setStages] = useState<Stage[]>([])
   const [value, setValue] = useState('')
+  const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({})
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+
+  const showValue = fieldConfigs.length === 0 || fieldConfigs.find(f => f.key === 'value')?.isActive !== false
+  const extraFields = fieldConfigs.filter(f => f.isActive && f.key !== 'value')
 
   // Load stages when pipeline changes
   useEffect(() => {
@@ -69,12 +74,17 @@ export function CreateLeadModal({ pipelines, onClose, onCreated }: Props) {
     setSubmitting(true)
     setError('')
     try {
+      const customFields: Record<string, unknown> = {}
+      for (const [k, v] of Object.entries(customFieldValues)) {
+        if (v !== '') customFields[k] = v
+      }
       await createLead(
         {
           name: name.trim(),
           pipelineId,
           stageId,
           value: value ? Number(value) : undefined,
+          customFields: Object.keys(customFields).length > 0 ? customFields : undefined,
         },
         token,
       )
@@ -203,18 +213,48 @@ export function CreateLeadModal({ pipelines, onClose, onCreated }: Props) {
           </div>
 
           {/* Value */}
-          <div>
-            <label style={labelStyle}>{t('modal.value')}</label>
-            <input
-              type="number"
-              value={value}
-              onChange={e => setValue(e.target.value)}
-              placeholder={t('modal.valuePlaceholder')}
-              min="0"
-              step="0.01"
-              style={inputStyle}
-            />
-          </div>
+          {showValue && (
+            <div>
+              <label style={labelStyle}>{t('modal.value')}</label>
+              <input
+                type="number"
+                value={value}
+                onChange={e => setValue(e.target.value)}
+                placeholder={t('modal.valuePlaceholder')}
+                min="0"
+                step="0.01"
+                style={inputStyle}
+              />
+            </div>
+          )}
+
+          {/* Dynamic custom fields */}
+          {extraFields.map(config => (
+            <div key={config.key}>
+              <label style={labelStyle}>
+                {config.label}{config.isRequired ? ' *' : ''}
+              </label>
+              {config.type === 'SELECT' ? (
+                <select
+                  value={customFieldValues[config.key] ?? ''}
+                  onChange={e => setCustomFieldValues(prev => ({ ...prev, [config.key]: e.target.value }))}
+                  style={{ ...inputStyle, cursor: 'pointer' }}
+                  required={config.isRequired}
+                >
+                  <option value="">--</option>
+                  {config.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                </select>
+              ) : (
+                <input
+                  type={config.type === 'EMAIL' ? 'email' : config.type === 'PHONE' ? 'tel' : config.type === 'NUMBER' ? 'number' : config.type === 'DATE' ? 'date' : 'text'}
+                  value={customFieldValues[config.key] ?? ''}
+                  onChange={e => setCustomFieldValues(prev => ({ ...prev, [config.key]: e.target.value }))}
+                  style={inputStyle}
+                  required={config.isRequired}
+                />
+              )}
+            </div>
+          ))}
 
           {/* Error */}
           {error && (

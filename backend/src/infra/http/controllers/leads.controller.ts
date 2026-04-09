@@ -64,6 +64,7 @@ export class LeadsController {
       value: dto.value,
       assignedToId: dto.assignedToId,
       tags: dto.tags,
+      customFields: dto.customFields,
     })
     if (result.isLeft()) throw result.value
     return {
@@ -153,6 +154,7 @@ export class LeadsController {
         status: dto.status,
         assignedToId: dto.assignedToId,
         tags: dto.tags,
+        customFields: dto.customFields,
       },
     })
     if (result.isLeft()) throw result.value

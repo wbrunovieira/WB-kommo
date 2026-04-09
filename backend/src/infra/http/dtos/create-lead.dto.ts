@@ -30,4 +30,8 @@ export class CreateLeadDto {
   @IsArray()
   @IsString({ each: true })
   tags?: string[]
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  customFields?: Record<string, unknown>
 }
