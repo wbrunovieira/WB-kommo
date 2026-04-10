@@ -1,6 +1,6 @@
 # WB-Kommo — CRM SaaS: Documento de Arquitetura
 
-> Versão 1.10 — 2026-04-09
+> Versão 1.11 — 2026-04-10
 
 ---
 
@@ -1930,7 +1930,208 @@ Reseller → POST /auth/impersonate/:tenantId
 
 ---
 
-## 10. Decisões de Arquitetura — ADRs
+## 10. Módulo de Mensageria — WhatsApp via Evolution API
+
+### 10.1 Visão Geral
+
+O módulo de mensageria permite que cada tenant conecte seu número de WhatsApp ao CRM. Mensagens recebidas criam ou atualizam leads automaticamente. Agentes respondem diretamente pelo inbox do CRM sem sair da plataforma.
+
+A infraestrutura é centralizada: um único servidor **Evolution API** rodando na nossa infraestrutura, com uma instância por tenant.
+
+```
+Servidor Evolution API (nosso)
+  ├── instância: tenant-empresa-abc  → número WhatsApp da Empresa ABC
+  ├── instância: tenant-empresa-xyz  → número WhatsApp da Empresa XYZ
+  └── instância: tenant-empresa-123  → número WhatsApp da Empresa 123
+```
+
+### 10.2 Estratégia Faseada
+
+#### Fase A — Evolution API modo Baileys (QR code)
+
+**Objetivo:** entregar inbox funcional rapidamente, sem burocracia com a Meta.
+
+| Aspecto | Detalhe |
+|---------|---------|
+| Conexão | Tenant escaneia QR code com o celular |
+| Custo para o tenant | Zero |
+| Setup | ~5 minutos |
+| Funcionalidades | Inbox unificado, envio/recebimento de mensagens, sync de histórico |
+| Risco de ban | Existe — uso deve ser estritamente manual (agentes respondendo) |
+| Automação | **Proibida neste modo** — disparo de robô no Baileys acelera bans |
+| Recomendado para | Agentes respondendo leads manualmente pelo CRM |
+
+#### Fase B — Evolution API modo Cloud API (Meta oficial)
+
+**Objetivo:** permitir automações, templates e broadcasts sem risco de ban.
+
+Quando o tenant quiser automação (robôs, campanhas, disparos programados), migra para o modo oficial. O número muda, mas **o backend não muda nada** — mesmos endpoints do Evolution API, só o parâmetro `integration` na criação da instância passa de `WHATSAPP-BAILEYS` para `WHATSAPP-BUSINESS`.
+
+| Aspecto | Detalhe |
+|---------|---------|
+| Conexão | Token permanente Meta + WhatsApp Number ID |
+| Custo para o tenant | Taxas Meta por conversa (~R$ 0,08–0,80 dependendo da categoria) |
+| Setup | Tenant precisa verificar Meta Business Manager (dias) |
+| Funcionalidades | Tudo do Fase A + templates aprovados, broadcasts, botões interativos, listas |
+| Risco de ban | Zero (uso oficial) |
+| Automação | ✅ Liberada — templates pré-aprovados pela Meta |
+| Recomendado para | Tenants que precisam de automação de vendas / campanhas |
+
+**Importante:** Cloud API exige número dedicado — não pode estar conectado em nenhum WhatsApp (app, web ou Baileys). Tenants que migram precisam de um número novo ou devem desconectar o atual.
+
+#### Comparativo das fases
+
+| | Fase A (Baileys) | Fase B (Cloud API) |
+|---|---|---|
+| Inbox + respostas manuais | ✅ | ✅ |
+| Sync histórico de conversas | ✅ | ✅ |
+| Automação / robôs | ❌ | ✅ |
+| Broadcasts / campanhas | ❌ | ✅ |
+| Templates com botões | ❌ | ✅ |
+| Risco de ban | Baixo (uso manual) | Zero |
+| Verificação Meta | Não | Sim |
+| Mesmo número para tudo | ✅ | ✅ (número dedicado) |
+
+### 10.3 Arquitetura de Integração
+
+```
+Tenant conecta WhatsApp
+  → Backend cria instância: POST /instance/create (Evolution API)
+     { instanceName: "tenant-{tenantId}", integration: "WHATSAPP-BAILEYS" }
+  → Evolution retorna QR code → exibido no frontend para o tenant escanear
+  → Conexão estabelecida → webhook QRCODE_UPDATED / CONNECTION_UPDATE dispara
+
+Mensagem chega no WhatsApp do tenant
+  → Evolution API dispara webhook: POST /webhooks/whatsapp/{tenantId}
+  → Nosso backend recebe MESSAGES_UPSERT
+  → Se remetente desconhecido: cria Contact + Lead no primeiro estágio do pipeline padrão
+  → Se remetente conhecido: vincula à conversa existente do lead
+  → Salva Message na tabela conversations/messages
+  → Evento WebSocket notifica o frontend em tempo real
+
+Agente responde pelo CRM
+  → Frontend envia: POST /conversations/{conversationId}/messages
+  → Backend chama: POST /message/sendText/{instanceName} (Evolution API)
+  → Mensagem entregue no WhatsApp do cliente
+  → Evolution retorna webhook MESSAGES_UPDATE com status (sent → delivered → read)
+```
+
+### 10.4 Modelo de Dados
+
+```prisma
+model WhatsappInstance {
+  id           String              @id @default(uuid())
+  tenantId     String              @unique
+  instanceName String              @unique  // "tenant-{tenantId}"
+  mode         WhatsappMode        @default(BAILEYS)
+  status       WhatsappStatus      @default(DISCONNECTED)
+  phoneNumber  String?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id])
+  conversations Conversation[]
+}
+
+model Conversation {
+  id           String    @id @default(uuid())
+  tenantId     String
+  leadId       String?   // null até ser vinculado a um lead
+  instanceId   String
+  externalId   String    // conversation_id no Evolution API (ex: 5511999999999@s.whatsapp.net)
+  channel      String    @default("whatsapp")
+  status       ConvStatus @default(OPEN)
+  assignedToId String?
+  lastMessageAt DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  tenant    Tenant           @relation(fields: [tenantId], references: [id])
+  lead      Lead?            @relation(fields: [leadId], references: [id])
+  instance  WhatsappInstance @relation(fields: [instanceId], references: [id])
+  messages  Message[]
+
+  @@unique([instanceId, externalId])
+  @@index([tenantId, status])
+  @@index([tenantId, leadId])
+}
+
+model Message {
+  id             String      @id @default(uuid())
+  conversationId String
+  externalMsgId  String?     // msgid do Evolution API
+  direction      MsgDirection // INBOUND | OUTBOUND
+  type           MessageType  // TEXT | IMAGE | VIDEO | FILE | AUDIO | LOCATION | CONTACT | STICKER
+  content        String?     // texto ou legenda
+  mediaUrl       String?
+  fileName       String?
+  fileSize       Int?
+  status         MsgStatus   @default(SENT) // SENT | DELIVERED | READ | FAILED
+  sentById       String?     // identityId do agente (null se inbound)
+  timestamp      DateTime
+  createdAt      DateTime    @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+
+  @@index([conversationId, timestamp])
+}
+
+enum WhatsappMode   { BAILEYS CLOUD_API }
+enum WhatsappStatus { DISCONNECTED CONNECTING CONNECTED QR_PENDING }
+enum ConvStatus     { OPEN RESOLVED PENDING }
+enum MsgDirection   { INBOUND OUTBOUND }
+enum MessageType    { TEXT IMAGE VIDEO FILE AUDIO LOCATION CONTACT STICKER }
+enum MsgStatus      { SENT DELIVERED READ FAILED }
+```
+
+### 10.5 Eventos Webhook do Evolution API utilizados
+
+| Evento | Quando dispara | Ação no nosso backend |
+|--------|---------------|----------------------|
+| `QRCODE_UPDATED` | Novo QR gerado | Envia QR ao frontend via WebSocket |
+| `CONNECTION_UPDATE` | Conectado / desconectado | Atualiza `WhatsappInstance.status` |
+| `MESSAGES_UPSERT` | Nova mensagem recebida (inbound) | Cria/atualiza Conversation + Message + Lead |
+| `MESSAGES_UPDATE` | Status da mensagem mudou | Atualiza `Message.status` (delivered/read) |
+| `MESSAGES_DELETE` | Mensagem apagada pelo remetente | Soft-delete da Message |
+| `PRESENCE_UPDATE` | Digitando / gravando áudio | Repassa ao frontend via WebSocket |
+
+### 10.6 Autenticação com o Evolution API
+
+```
+EVOLUTION_API_URL=https://evolution.seudominio.com
+EVOLUTION_API_KEY=<global-api-key>  # armazenado só no backend, nunca exposto
+```
+
+O backend usa o `apikey` global para criar/gerenciar instâncias. Tenants nunca têm acesso direto ao Evolution API.
+
+### 10.7 Rotas HTTP no backend (NestJS)
+
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| `POST` | `/messaging/connect` | Cria instância + retorna QR code |
+| `GET` | `/messaging/status` | Status da conexão do tenant |
+| `DELETE` | `/messaging/disconnect` | Desconecta e remove instância |
+| `POST` | `/webhooks/whatsapp/:tenantId` | Recebe eventos do Evolution API |
+| `GET` | `/conversations` | Lista conversas do tenant |
+| `GET` | `/conversations/:id/messages` | Histórico de mensagens |
+| `POST` | `/conversations/:id/messages` | Envia mensagem pelo agente |
+| `PATCH` | `/conversations/:id/assign` | Atribui conversa a um agente |
+| `PATCH` | `/conversations/:id/resolve` | Marca conversa como resolvida |
+
+### 10.8 Frontend — Inbox Unificado
+
+- Sidebar: item "Mensagens" com badge de conversas não lidas
+- Lista de conversas ordenada por última mensagem (mais recente primeiro)
+- Thread de mensagens com bolhas (estilo WhatsApp), indicadores de status (✓✓)
+- Digitação em tempo real via WebSocket (`PRESENCE_UPDATE`)
+- Upload de mídia (imagem, arquivo, áudio)
+- Painel lateral com dados do lead vinculado
+- Botão "Vincular ao Lead" para conversas ainda sem lead associado
+- Página de configuração: conectar/desconectar WhatsApp, exibir QR code
+
+---
+
+## 11. Decisões de Arquitetura — ADRs
 
 | Decisão | Escolha | Motivo |
 |---------|---------|--------|
@@ -1947,6 +2148,7 @@ Reseller → POST /auth/impersonate/:tenantId
 | Refresh Token storage | Hash SHA256 no banco | Token raw nunca persiste — mitigação de vazamento de banco. |
 | i18n | next-intl (`[locale]` segment) | RSC-first, mensagens tipadas, middleware de detecção automática, suporte a `pt`, `en`, `it`, `es`. |
 | State frontend | Zustand + TanStack Query | Zustand para UI, TanStack Query para server state — separação clara. |
+| Mensageria WhatsApp | Evolution API (self-hosted) | Servidor central com uma instância por tenant. Fase A: Baileys (QR, zero burocracia, inbox manual). Fase B: Cloud API oficial (automação, templates, zero risco de ban). Mesmo backend para os dois modos — só o parâmetro `integration` muda. |
 
 ---
 
@@ -2010,6 +2212,28 @@ Reseller → POST /auth/impersonate/:tenantId
 - [ ] AuditLog UI para reseller
 - [ ] Testes e2e dos fluxos SaaS
 
+### Fase 5 — Mensageria WhatsApp
+
+#### Fase 5A — Inbox + mensagens manuais (Evolution API Baileys)
+- [ ] Evolution API — configuração do servidor, variáveis de ambiente
+- [ ] `WhatsappInstance` entity + `Conversation` entity + `Message` entity
+- [ ] Use cases: `ConnectWhatsappUseCase`, `DisconnectWhatsappUseCase`, `SendMessageUseCase`, `ListConversationsUseCase`, `GetConversationMessagesUseCase`
+- [ ] Prisma schema: `WhatsappInstance`, `Conversation`, `Message` + enums
+- [ ] `POST /webhooks/whatsapp/:tenantId` — recebe MESSAGES_UPSERT, CONNECTION_UPDATE, QRCODE_UPDATED
+- [ ] Auto-criação de Contact + Lead ao receber mensagem de número desconhecido
+- [ ] WebSocket gateway — entrega QR code e mensagens em tempo real ao frontend
+- [ ] `MessagingController` — rotas de connect, status, disconnect, conversations, messages
+- [ ] Frontend — página de configuração WhatsApp (QR code, status de conexão)
+- [ ] Frontend — inbox unificado (lista de conversas + thread de mensagens)
+- [ ] Frontend — painel lateral com dados do lead vinculado à conversa
+
+#### Fase 5B — Automação (Evolution API Cloud API / Meta oficial)
+- [ ] Migração de instância Baileys → Cloud API (mesmo backend, `integration: WHATSAPP-BUSINESS`)
+- [ ] Templates de mensagem (pré-cadastro + envio via Cloud API)
+- [ ] Broadcasts / campanhas para lista de leads
+- [ ] Salesbot — builder de fluxos automatizados (trigger: nova mensagem, mudança de estágio)
+- [ ] Estatísticas de entrega por campanha (sent / delivered / read / failed)
+
 ### Fase 4 — Polimento (Semanas 12-14)
 - [ ] Animações e UX refinados (Framer Motion)
 - [ ] Performance (query optimization, caching Redis)
@@ -2025,5 +2249,7 @@ Reseller → POST /auth/impersonate/:tenantId
 *Versão 1.8 — atualizado em 2026-04-08: frontend Next.js 15 implementado (login + dashboard); i18n next-intl v4 com pt/en/it/es, detecção de browser, cookie de preferência e mensagens split por namespace; Refresh Token movido para httpOnly cookie; login aceita workspace slug; SeedService automático na inicialização; `esModuleInterop` adicionado ao tsconfig; workspace lembrado em localStorage; 161 testes passando.*
 
 *Versão 1.9 — atualizado em 2026-04-09: adicionado PLATFORM_OWNER na hierarquia de roles; `resellerTenantId` no modelo Tenant; política de acesso ao CRM definida (PLATFORM_OWNER e RESELLER apenas via impersonação); matriz de permissões de leads documentada; política de soft-delete obrigatório para leads (MEMBER não pode deletar); permissões granulares `canViewAllLeads` / `canEditAllLeads` para MEMBER; seção 3.13 adicionada com comparação ao modelo Kommo e rastreabilidade de impersonação; migration baseline criada (`prisma migrate dev`).*
+
+*Versão 1.11 — atualizado em 2026-04-10: seção 10 adicionada — Módulo de Mensageria WhatsApp via Evolution API. Estratégia faseada documentada: Fase A (Baileys, QR code, inbox manual, zero burocracia) → Fase B (Cloud API oficial, automação, templates, broadcasts, zero risco de ban). Modelo de dados completo (WhatsappInstance, Conversation, Message). Mapeamento de webhooks do Evolution API. Rotas HTTP do backend. Visão do inbox no frontend. ADR adicionado. Fase 5 adicionada ao roadmap.*
 
 *Versão 1.10 — atualizado em 2026-04-09: status de implementação atualizado; AGENT role adicionado (5º nível, acesso restrito a leads); Módulo Pipelines + Stages implementado (CRUD + reorder + Swagger); Módulo Leads implementado (CRUD + soft-delete + restore + field configs + Swagger); WorkspaceController implementado (GET/POST/PATCH/DELETE `/workspace/users`); Swagger completo em todas as rotas (incluindo `@ApiBody`, `@ApiQuery`); Frontend: sidebar com nav por role, leads page (kanban + lista + drag&drop + modais de detail/edit/delete), pipelines page, settings page, users page (confirm password + eye toggle + soft-delete). Fase 2 quase completa — faltam Activities + Contacts e testes E2E do CRM.*
