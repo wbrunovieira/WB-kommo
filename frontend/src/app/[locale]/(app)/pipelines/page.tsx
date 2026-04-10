@@ -32,6 +32,137 @@ import {
   Stage,
 } from '@/lib/api'
 
+// ── Preset color palette ──────────────────────────────────────────────────────
+
+const PRESET_COLORS = [
+  '#6c63ff', '#748ffc', '#4dabf7', '#4fcbff',
+  '#63e6be', '#69db7c', '#a9e34b', '#ffd43b',
+  '#ffa94d', '#ff922b', '#ff6b6b', '#ff8787',
+  '#f783ac', '#da77f2', '#e599f7', '#8888aa',
+]
+
+function ColorPicker({
+  value,
+  onChange,
+  label,
+}: {
+  value: string
+  onChange: (color: string) => void
+  label: string
+}) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  const isCustom = value !== '' && !PRESET_COLORS.includes(value)
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+        <label style={labelStyle}>{label}</label>
+        {value && (
+          <span style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '5px',
+            backgroundColor: `${value}22`,
+            border: `1px solid ${value}66`,
+            borderRadius: '6px',
+            padding: '2px 8px',
+            fontSize: '11px',
+            fontWeight: 600,
+            color: value,
+          }}>
+            <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: value, display: 'inline-block' }} />
+            {value.toUpperCase()}
+          </span>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+        {PRESET_COLORS.map(c => (
+          <button
+            key={c}
+            type="button"
+            onClick={() => onChange(value === c ? '' : c)}
+            title={c}
+            style={{
+              width: '28px',
+              height: '28px',
+              borderRadius: '6px',
+              backgroundColor: c,
+              border: value === c ? '2px solid #fff' : '2px solid transparent',
+              cursor: 'pointer',
+              padding: 0,
+              outline: value === c ? `2px solid ${c}` : 'none',
+              outlineOffset: '1px',
+              transition: 'transform 0.1s',
+              transform: value === c ? 'scale(1.15)' : 'scale(1)',
+              flexShrink: 0,
+            }}
+          />
+        ))}
+
+        {/* Custom color wheel button */}
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          title="Cor personalizada"
+          style={{
+            width: '28px',
+            height: '28px',
+            borderRadius: '6px',
+            background: isCustom
+              ? value
+              : 'conic-gradient(red, yellow, lime, cyan, blue, magenta, red)',
+            border: isCustom ? '2px solid #fff' : '2px solid transparent',
+            outline: isCustom ? `2px solid ${value}` : 'none',
+            outlineOffset: '1px',
+            cursor: 'pointer',
+            padding: 0,
+            flexShrink: 0,
+            transform: isCustom ? 'scale(1.15)' : 'scale(1)',
+            transition: 'transform 0.1s',
+          }}
+        />
+        <input
+          ref={inputRef}
+          type="color"
+          value={value || '#6c63ff'}
+          onChange={e => onChange(e.target.value)}
+          style={{ position: 'absolute', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }}
+          tabIndex={-1}
+        />
+
+        {/* Clear button */}
+        {value && (
+          <button
+            type="button"
+            onClick={() => onChange('')}
+            title="Remover cor"
+            style={{
+              width: '28px',
+              height: '28px',
+              borderRadius: '6px',
+              background: 'none',
+              border: '1px dashed #4a4a6a',
+              cursor: 'pointer',
+              color: '#8888aa',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 0,
+              flexShrink: 0,
+              fontSize: '14px',
+            }}
+          >
+            ×
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 const inputStyle: React.CSSProperties = {
   width: '100%',
   backgroundColor: '#1a1a2e',
@@ -435,15 +566,7 @@ function CreateStageModal({ t, pipelineId, nextOrder, onClose, onCreated }: {
             <label style={labelStyle}>{t('stageModal.name')} *</label>
             <input autoFocus type="text" value={name} onChange={e => setName(e.target.value)} placeholder={t('stageModal.namePlaceholder')} style={inputStyle} />
           </div>
-          <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end' }}>
-            <div style={{ flex: 1 }}>
-              <label style={labelStyle}>{t('stageModal.color')}</label>
-              <input type="text" value={color} onChange={e => setColor(e.target.value)} placeholder={t('stageModal.colorPlaceholder')} style={inputStyle} />
-            </div>
-            {color && (
-              <div style={{ width: '38px', height: '38px', borderRadius: '8px', backgroundColor: color, border: '1px solid #2a2a45', flexShrink: 0 }} />
-            )}
-          </div>
+          <ColorPicker value={color} onChange={setColor} label={t('stageModal.color')} />
           {error && <p style={{ margin: 0, fontSize: '13px', color: '#ff6b6b' }}>{error}</p>}
           <ModalActions onCancel={onClose} cancelLabel={t('stageModal.cancel')} submitLabel={submitting ? t('stageModal.creating') : t('stageModal.create')} submitting={submitting} disabled={!name.trim() || submitting} />
         </form>
@@ -494,15 +617,7 @@ function EditStageModal({ t, pipelineId, stage, onClose, onUpdated }: {
             <label style={labelStyle}>{t('editStageModal.name')} *</label>
             <input autoFocus type="text" value={name} onChange={e => setName(e.target.value)} style={inputStyle} />
           </div>
-          <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end' }}>
-            <div style={{ flex: 1 }}>
-              <label style={labelStyle}>{t('editStageModal.color')}</label>
-              <input type="text" value={color} onChange={e => setColor(e.target.value)} placeholder="#6c63ff" style={inputStyle} />
-            </div>
-            {color && (
-              <div style={{ width: '38px', height: '38px', borderRadius: '8px', backgroundColor: color, border: '1px solid #2a2a45', flexShrink: 0 }} />
-            )}
-          </div>
+          <ColorPicker value={color} onChange={setColor} label={t('editStageModal.color')} />
           {error && <p style={{ margin: 0, fontSize: '13px', color: '#ff6b6b' }}>{error}</p>}
           <ModalActions onCancel={onClose} cancelLabel={t('editStageModal.cancel')} submitLabel={submitting ? t('editStageModal.saving') : t('editStageModal.save')} submitting={submitting} disabled={!name.trim() || submitting} />
         </form>
